@@ -634,7 +634,7 @@ always_ff @(posedge clk_sys) begin
 end
 
 PGM pgm_inst(
-    .clk(clk_sys),
+    .clk_50m(clk_sys),
     .reset(reset),
 
     .pause(system_pause),

@@ -1,7 +1,7 @@
 import system_consts::*;
 
 module PGM(
-    input             clk,
+    input             clk_50m,
     input             reset,
 
     input  game_t     game,
@@ -71,6 +71,8 @@ module PGM(
     input             pause
 );
 
+wire clk = clk_50m;
+
 ddr_if ddr_ss(), ddr_obj();
 
 ddr_mux ddr_mux(
@@ -82,11 +84,10 @@ ddr_mux ddr_mux(
 
 /////////////////////////////
 //// Clock Enable Signals
-wire ce_6m, ce_13m;
-wire ce_12m, ce_dummy_6m;
+wire ce_20m, ce_dummy_10m;
 reg ce_cpu, ce_cpu_180;
 wire ce_8m, ce_4m;
-assign ce_pixel = ce_6m;
+wire ce_50m = 1;
 /////////////////////////////
 
 
@@ -315,7 +316,7 @@ always_ff @(posedge clk) begin
 
 
         SST_RESTORE_HOLD_RESET: begin
-            if (ce_12m) begin
+            if (ce_20m) begin
                 ss_reset_counter <= ss_reset_counter + 1;
                 if (&ss_reset_counter) begin
                     ss_state <= SST_RESTORE_WAIT_RESET;
@@ -362,30 +363,20 @@ wire irq4 = 0;
 
 //////////////////////////////////
 //// CLOCK ENABLES
-jtframe_frac_cen #(2) video_cen
-(
-    .clk(clk),
-    .cen_in(1),
-    .n(10'd1),
-    .m(10'd4),
-    .cen({ce_6m, ce_13m}),
-    .cenb()
-);
-
 jtframe_frac_cen #(2) cen_steady
 (
     .clk(clk),
     .cen_in(~obj_paused | ss_cpu_execute),
-    .n(10'd172),
-    .m(10'd765),
-    .cen({ce_dummy_6m, ce_12m}),
+    .n(10'd2),
+    .m(10'd5),
+    .cen({ce_dummy_10m, ce_20m}),
     .cenb()
 );
 
 reg [9:0] ce_steady_count;
 reg [10:0] ce_cpu_count;
 always_ff @(posedge clk) begin
-    if (ce_12m) begin
+    if (ce_20m) begin
         ce_steady_count <= ce_steady_count + 10'd1;
     end
 
@@ -620,8 +611,8 @@ assign sdr_scn0_addr = TILE_ROM_SDR_BASE[26:0] + { 6'd0, igs023_sdr_addr };
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
-    .ce_13m,
-    .ce_pixel, // TODO - does this generate it?
+    .ce_50m,
+    .ce_pixel,
 
     .reset,
 

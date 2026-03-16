@@ -168,7 +168,7 @@ rom_loader rom_loader(
 
 // Instantiate the PGM module
 PGM pgm_inst(
-    .clk(clk),
+    .clk_50m(clk),
     .reset(reset | rom_load_busy),
     .game(board_cfg.game),
     

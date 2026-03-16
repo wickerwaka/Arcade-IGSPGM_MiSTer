@@ -45,8 +45,8 @@ endmodule
 
 module IGS023 #(parameter SS_IDX=-1) (
     input clk,
-    input ce_13m,
-    input ce_pixel,
+    input ce_50m,
+    output ce_pixel,
 
     input reset,
 
@@ -103,6 +103,17 @@ typedef enum bit [2:0]
     IDLE3
 } access_state_t;
 
+reg [4:0] ce_pixel_shift;
+assign ce_pixel = ce_50m & ce_pixel_shift[4];
+wire ce_pixel_pre1 = ce_50m & ce_pixel_shift[3];
+
+always_ff @(posedge clk) begin
+    if (~|ce_pixel_shift) begin
+        ce_pixel_shift <= 5'b00001;
+    end else if (ce_50m) begin
+        ce_pixel_shift <= {ce_pixel_shift[3:0], ce_pixel_shift[4]};
+    end
+end
 
 reg dtack_n;
 reg prev_cs_n;
