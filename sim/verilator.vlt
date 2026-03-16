@@ -1,0 +1,3 @@
+`verilator_config
+lint_off -file "../rtl/jt10_auto_ss.sv"
+lint_off -file "../rtl/tv80_auto_ss.sv"

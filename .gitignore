@@ -1,0 +1,14 @@
+output_files/
+roms/
+docs/
+build_id.v
+**/.DS_Store
+*.bak
+db/
+incremental_db/
+deploy.done
+.claude/
+CLAUDE.md
+sim/screenshots/
+sim/states/
+util/pgm_mame
