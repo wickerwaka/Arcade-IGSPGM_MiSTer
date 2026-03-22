@@ -36,6 +36,7 @@ SRCS = imgui/imgui.cpp \
 		sim_video.cpp \
 		sim_command.cpp \
 		games.cpp \
+		m68k.cpp \
 		imgui_wrap.cpp \
 		third_party/miniz.cpp \
 		third_party/pugixml.cpp \

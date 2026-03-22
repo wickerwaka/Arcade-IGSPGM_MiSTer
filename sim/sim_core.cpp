@@ -10,6 +10,7 @@
 #include "sim_ddr.h"
 #include "sim_video.h"
 #include "gfx_cache.h"
+#include "m68k.h"
 
 #include <cstring>
 #include <cstdio>
@@ -64,6 +65,10 @@ void SimCore::Init()
     SetMemory(MemoryRegion::PALETTE_RAM, unique_memory_8b(palram, 32 * 1024));
     SetMemory(MemoryRegion::BIOS_ROM, std::make_unique<MemorySlice>(*mSDRAM, CPU_ROM_SDR_BASE, 1024 * 1024));
     SetMemory(MemoryRegion::TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, TILE_ROM_SDR_BASE, 16 * 1024 * 1024));
+
+    // Initialize M68K CPU wrapper
+    mCPU = std::make_unique<M68K>();
+    mCPU->MapMemory(0x00000000, 0xfe000000, Memory(MemoryRegion::BIOS_ROM));
 }
 
 void SimCore::Tick(int count)

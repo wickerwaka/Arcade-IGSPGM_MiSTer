@@ -17,6 +17,7 @@ class SimSDRAM;
 class SimDDR;
 class SimVideo;
 class GfxCache;
+class M68K;
 
 enum class MemoryRegion : int
 {
@@ -41,6 +42,7 @@ class SimCore
     std::unique_ptr<SimSDRAM> mSDRAM;
 
     std::unique_ptr<GfxCache> mGfxCache;
+    std::unique_ptr<M68K> mCPU;
 
     // Simulation state (made public for compatibility)
     uint64_t mTotalTicks;
