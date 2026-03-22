@@ -1,10 +1,10 @@
 <misterromdescription>
 	<name>PGM Bios</name>
 	<setname>pgm</setname>
-	<rbf>PGM</rbf>
+	<rbf>IGSPGM</rbf>
 	<rotation>horizontal</rotation>
 	<mameversion>277</mameversion>
-	<buttons default="B,A,Start,Select,L,R" names="Bite/Punch,Kick,-,-,-,-,Start,Coin,Pause,SS"/>
+	<buttons default="B,A,X,Y,Start,Select,L,R" names="A,B,C,D,-,-,Start,Coin,Pause,SS"/>
 	<switches default="fffe">
 		<dip name="Dip0" bits="0" values="1,0" ids="Off,On"/>
 		<dip name="Dip1" bits="1" values="1,0" ids="Off,On"/>
