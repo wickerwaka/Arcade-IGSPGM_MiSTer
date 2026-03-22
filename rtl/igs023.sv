@@ -331,8 +331,9 @@ always @(posedge clk) begin
             unique case(access_cycle)
                 FG_ATTRIB0: fg_code <= vram_din;
                 FG_ATTRIB1: begin
+                    v = logical_vcnt[8:0] - fg_y[8:0];
                     fg_attrib <= vram_din;
-                    fg_rom_address <= { fg_code, logical_vcnt[2:0], 2'd0 };
+                    fg_rom_address <= { fg_code, v[2:0], 2'd0 };
                     fg_rom_req <= 1;
                 end
 
