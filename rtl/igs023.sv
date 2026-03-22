@@ -128,8 +128,6 @@ wire is_pal_access = cpu_addr[21:20] == 2'b10;
 reg ram_pending = 0;
 reg [1:0] ram_access = 0;
 
-reg [8:0] hcnt_actual, vcnt_actual;
-
 reg [15:0] sprite_data[256 * 8];
 reg [15:0] zoom_table[32];
 reg [15:0] ctrl[16];
@@ -142,33 +140,39 @@ wire [15:0] ctrl_flags = ctrl[14];
 wire bg_en = ~ctrl_flags[12];
 wire fg_en = ~ctrl_flags[11];
 
-wire [8:0] vcnt = vcnt_actual;
-wire [8:0] hcnt = hcnt_actual;
-
 assign cpu_dtack_n = cpu_cs_n ? 0 : dtack_n;
 
 assign pal_dout = pal_addr[0] ? cpu_din[7:0] : cpu_din[15:8];
 assign vram_dout = cpu_din;
 
-assign hsync = ~(hcnt_actual >= 25 && hcnt_actual < 345);
-assign hblank = hsync;
-assign vsync = ~(vcnt_actual >= 2 && vcnt_actual < 226);
-assign vblank = vsync;
+
+// 0 is the start of blanking
+reg [8:0] vcnt;
+reg [9:0] hcnt;
+
+// 0 is the top/right of the screen
+wire [10:0] logical_hcnt = { 1'b0, hcnt } - 11'd189;
+wire [10:0] logical_vcnt = { 2'b0, vcnt } - 11'd38;
+
+
+assign hsync = (hcnt >= 63 && hcnt < (63 + 63));
+assign hblank = hcnt < 192;
+assign vsync = (vcnt >= 14 && vcnt < (14 + 8));
+assign vblank = vcnt < 38;
 
 
 always @(posedge clk) begin
     if (reset) begin
-        hcnt_actual <= 0;
-        vcnt_actual <= 0;
+        hcnt <= 0;
+        vcnt <= 0;
     end else if (ce_pixel) begin
-        hcnt_actual <= hcnt_actual + 1;
+        hcnt <= hcnt + 1;
 
-        // TODO - random numbers
-        if (hcnt_actual == 424) begin
-            hcnt_actual <= 504;
-            vcnt_actual <= vcnt_actual + 1;
-            if (vcnt_actual == 250) begin
-                vcnt_actual <= 0;
+        if (hcnt == 639) begin
+            hcnt <= 0;
+            vcnt <= vcnt + 1;
+            if (vcnt == 261) begin
+                vcnt <= 0;
             end
         end
     end
@@ -177,7 +181,7 @@ end
 access_state_t access_cycle;
 access_state_t next_access_cycle;
 
-wire [8:0] bg_hofs = bg_x[8:0] + bg_rowscroll[8:0];
+wire [10:0] bg_hofs = bg_x[10:0] + bg_rowscroll[10:0];
 wire [9:0] bg_dot, fg_dot;
 reg [15:0] bg_rowscroll;
 reg [15:0] bg_code, bg_attrib;
@@ -195,11 +199,11 @@ wire bg_flipy = bg_attrib[7];
 wire fg_flipx = fg_attrib[6];
 wire fg_flipy = fg_attrib[7];
 
-wire [8:0] bg_draw_hcnt = (hcnt - bg_hofs);
-wire [8:0] fg_draw_hcnt = (hcnt - fg_x[8:0]);
+wire [10:0] bg_draw_hcnt = (logical_hcnt - bg_hofs);
+wire [10:0] fg_draw_hcnt = (logical_hcnt - fg_x[10:0]);
 
 reg [1:0] bg_load_index;
-reg [8:0] bg_load_hcnt, fg_load_hcnt;
+reg [10:0] bg_load_hcnt, fg_load_hcnt;
 
 tc0100scn_shifter bg_shift(
     .clk, .ce(ce_pixel),
@@ -235,7 +239,7 @@ always_ff @(posedge clk) begin
         color <= {color_read, pal_din[7:0]};
         color_addr <= 14'h1000 + { 4'd0, fg_dot[9:5], fg_dot[3:0], 1'b0 };
     end else if (ce_pixel_post2) begin
-        color_addr <= 14'h1000 + { 4'd0, fg_dot[9:5], fg_dot[3:0], 1'b1 };
+        color_addr[0] <= 1;
         color_read <= pal_din[6:0];
     end
 end
@@ -257,12 +261,12 @@ always_comb begin
 
     unique case(access_cycle)
         FG_ATTRIB0: begin
-            v = vcnt - fg_y[8:0];
+            v = logical_vcnt[8:0] - fg_y[8:0];
             vram_addr = fg_addr + { 2'b0, v[8:3], fg_load_hcnt[8:3], 2'b00 };
         end
 
         FG_ATTRIB1: begin
-            v = vcnt - fg_y[8:0];
+            v = logical_vcnt[8:0] - fg_y[8:0];
             vram_addr = fg_addr + { 2'b0, v[8:3], fg_load_hcnt[8:3], 2'b10 };
         end
 
@@ -328,7 +332,7 @@ always @(posedge clk) begin
                 FG_ATTRIB0: fg_code <= vram_din;
                 FG_ATTRIB1: begin
                     fg_attrib <= vram_din;
-                    fg_rom_address <= { fg_code, vcnt[2:0], 2'd0 };
+                    fg_rom_address <= { fg_code, logical_vcnt[2:0], 2'd0 };
                     fg_rom_req <= 1;
                 end
 
@@ -365,8 +369,8 @@ always @(posedge clk) begin
                 end
 
                 FG_ATTRIB0: begin
-                    bg_load_hcnt <= (hcnt + 9'd16) - bg_hofs;
-                    fg_load_hcnt <= (hcnt + 9'd16) - fg_x[8:0];
+                    bg_load_hcnt <= (logical_hcnt + 11'd16) - bg_hofs;
+                    fg_load_hcnt <= (logical_hcnt + 11'd16) - fg_x[10:0];
                 end
 
                 default: begin

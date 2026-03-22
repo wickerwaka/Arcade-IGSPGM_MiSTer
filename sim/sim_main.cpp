@@ -89,14 +89,14 @@ int main(int argc, char **argv)
 
     if (!command_queue.is_headless())
     {
-        gSimCore.mVideo->init(320, 224, imgui_get_renderer());
+        gSimCore.mVideo->init(448, 224, imgui_get_renderer());
 
         gSimCore.mGfxCache->Init(imgui_get_renderer(), gSimCore.Memory(MemoryRegion::PALETTE_RAM));
     }
     else
     {
         // Minimal init for headless mode
-        gSimCore.mVideo->init(320, 224, nullptr);
+        gSimCore.mVideo->init(448, 224, nullptr);
     }
 
     Verilated::traceEverOn(true);
