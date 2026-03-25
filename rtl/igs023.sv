@@ -1,5 +1,6 @@
-module tc0100scn_shifter #(
+module tile_shifter #(
     parameter TILE_WIDTH=8,
+    parameter BPP=4,
     parameter LENGTH=4
     )
 (
@@ -9,15 +10,15 @@ module tc0100scn_shifter #(
     input                                         load,
     input [$clog2(LENGTH)-1:0]                    load_index,
     input [4:0]                                   load_color,
-    input [(TILE_WIDTH*4)-1:0]                    load_data,
+    input [(TILE_WIDTH*BPP)-1:0]                    load_data,
     input                                         load_flip,
 
     input [$clog2(LENGTH)+$clog2(TILE_WIDTH)-1:0] tap,
-    output reg [9:0]                             dot_out
+    output reg [4+BPP:0]                              dot_out
 );
 
 reg [4:0] color_buf[LENGTH];
-reg [(TILE_WIDTH*4)-1:0] pixel_buf[LENGTH];
+reg [(TILE_WIDTH*BPP)-1:0] pixel_buf[LENGTH];
 
 wire [$clog2(LENGTH)-1:0] tap_index = tap[$left(tap):$clog2(TILE_WIDTH)];
 wire [$clog2(TILE_WIDTH)-1:0] tap_pixel = tap[$clog2(TILE_WIDTH)-1:0];
@@ -29,7 +30,7 @@ always_ff @(posedge clk) begin
         if (~load_flip) begin
             int i;
             for( i = 0; i < TILE_WIDTH; i = i + 1 ) begin
-                pixel_buf[load_index][(4 * ((TILE_WIDTH-1) - i)) +: 4] <= load_data[(4 * i) +: 4];
+                pixel_buf[load_index][(BPP * ((TILE_WIDTH-1) - i)) +: BPP] <= load_data[(BPP * i) +: BPP];
             end
         end else begin
             pixel_buf[load_index] <= load_data;
@@ -37,7 +38,7 @@ always_ff @(posedge clk) begin
     end
 
     if (ce) begin
-        dot_out <= { color_buf[tap_index], 1'b0, pixel_buf[tap_index][(4 * tap_pixel) +: 4] };
+        dot_out <= { color_buf[tap_index], pixel_buf[tap_index][(BPP * tap_pixel) +: BPP] };
     end
 end
 
@@ -74,7 +75,7 @@ module IGS023 #(parameter SS_IDX=-1) (
 
 
     // ROM interface
-    output reg [20:0] rom_address,
+    output reg [23:0] rom_address,
     input      [31:0] rom_data,
     output reg        rom_req,
     input             rom_ack,
@@ -93,15 +94,24 @@ module IGS023 #(parameter SS_IDX=-1) (
 
 typedef enum bit [2:0]
 {
-    CPU_ACCESS_0,
+    CPU_ACCESS,
     FG_ATTRIB0,
-    CPU_ACCESS_1,
     FG_ATTRIB1,
-    IDLE0,
-    IDLE1,
-    IDLE2,
-    IDLE3
+    BG_ATTRIB0,
+    BG_ATTRIB1
 } access_state_t;
+
+access_state_t idx_to_state[32] = '{
+    FG_ATTRIB0, FG_ATTRIB1, BG_ATTRIB0, BG_ATTRIB1, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS,
+    FG_ATTRIB0, FG_ATTRIB1, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS,
+    FG_ATTRIB0, FG_ATTRIB1, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS,
+    FG_ATTRIB0, FG_ATTRIB1, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS, CPU_ACCESS
+};
+
+access_state_t access_state;
+access_state_t next_access_state;
+
+
 
 reg [4:0] ce_pixel_shift;
 assign ce_pixel = ce_50m & ce_pixel_shift[4];
@@ -178,19 +188,19 @@ always @(posedge clk) begin
     end
 end
 
-access_state_t access_cycle;
-access_state_t next_access_cycle;
-
-wire [10:0] bg_hofs = bg_x[10:0] + bg_rowscroll[10:0];
-wire [9:0] bg_dot, fg_dot;
+wire [10:0] bg_hofs = bg_x[10:0]; // + bg_rowscroll[10:0];
+wire [9:0] bg_dot;
+wire [8:0] fg_dot;
 reg [15:0] bg_rowscroll;
 reg [15:0] bg_code, bg_attrib;
 reg [15:0] fg_code, fg_attrib;
 
+reg [(32*5)-1:0] bg_data;
 reg bg_load, fg_load;
-reg bg_rom_req, fg_rom_req;
-reg [20:0] bg_rom_address;
-reg [20:0] fg_rom_address;
+reg fg_rom_req;
+reg [2:0] bg_rom_req;
+reg [23:0] bg_rom_address;
+reg [23:0] fg_rom_address;
 
 reg [1:0] rom_req_ch;
 
@@ -205,18 +215,21 @@ wire [10:0] fg_draw_hcnt = (logical_hcnt - fg_x[10:0]);
 reg [1:0] bg_load_index;
 reg [10:0] bg_load_hcnt, fg_load_hcnt;
 
-tc0100scn_shifter bg_shift(
+tile_shifter #(
+    .TILE_WIDTH(32),
+    .BPP(5)
+    )bg_shift(
     .clk, .ce(ce_pixel),
-    .tap(bg_draw_hcnt[4:0]),
-    .load_index(bg_load_index),
-    .load_data({rom_data[15:8], rom_data[7:0], rom_data[31:24], rom_data[23:16]}),
+    .tap(bg_draw_hcnt[6:0]),
+    .load_index(bg_load_hcnt[6:5]),
+    .load_data(bg_data),
     .load_color(bg_attrib[5:1]),
-    .load_flip(bg_flipx),
+    .load_flip(~bg_flipx),
     .dot_out(bg_dot),
     .load(bg_load)
 );
 
-tc0100scn_shifter fg_shift(
+tile_shifter fg_shift(
     .clk, .ce(ce_pixel),
     .tap(fg_draw_hcnt[4:0]),
     .load_index(fg_load_hcnt[4:3]),
@@ -237,7 +250,10 @@ reg [14:0] color_addr;
 always_ff @(posedge clk) begin
     if (ce_pixel) begin
         color <= {color_read, pal_din[7:0]};
-        color_addr <= 14'h1000 + { 4'd0, fg_dot[9:5], fg_dot[3:0], 1'b0 };
+        if (~&fg_dot[3:0])
+            color_addr <= 14'h1000 + { 5'd0, fg_dot[8:4], fg_dot[3:0], 1'b0 };
+        else
+            color_addr <= 14'h0800 + { 4'd0, bg_dot, 1'b0 };
     end else if (ce_pixel_post2) begin
         color_addr[0] <= 1;
         color_read <= pal_din[6:0];
@@ -246,7 +262,7 @@ end
 
 always_comb begin
     bit [5:0] h;
-    bit [8:0] v;
+    bit [10:0] v;
 
     vram_addr = 16'd0;
     vram_we_l_n = 1;
@@ -257,21 +273,31 @@ always_comb begin
 
     v = 0;
 
-    next_access_cycle = access_state_t'(access_cycle + 3'd1);
+    access_state = idx_to_state[hcnt[4:0]];
+    next_access_state = idx_to_state[hcnt[4:0] + 5'd1];
 
-    unique case(access_cycle)
+    unique case(access_state)
         FG_ATTRIB0: begin
-            v = logical_vcnt[8:0] - fg_y[8:0];
-            vram_addr = fg_addr + { 2'b0, v[8:3], fg_load_hcnt[8:3], 2'b00 };
+            v = logical_vcnt[10:0] - fg_y[10:0];
+            vram_addr = fg_addr + { 3'b0, v[7:3], fg_load_hcnt[8:3], 2'b00 };
         end
 
         FG_ATTRIB1: begin
-            v = logical_vcnt[8:0] - fg_y[8:0];
-            vram_addr = fg_addr + { 2'b0, v[8:3], fg_load_hcnt[8:3], 2'b10 };
+            v = logical_vcnt[10:0] - fg_y[10:0];
+            vram_addr = fg_addr + { 3'b0, v[7:3], fg_load_hcnt[8:3], 2'b10 };
         end
 
-        CPU_ACCESS_0,
-        CPU_ACCESS_1: begin
+        BG_ATTRIB0: begin
+            v = logical_vcnt[10:0] + bg_y[10:0];
+            vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b00 };
+        end
+
+        BG_ATTRIB1: begin
+            v = logical_vcnt[10:0] + bg_y[10:0];
+            vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b10 };
+        end
+
+        CPU_ACCESS: begin
             if (is_pal_access && ram_access == 2'd2) begin
                 pal_addr = {cpu_addr[14:1], 1'b0};
                 pal_we_n = cpu_rw;
@@ -290,7 +316,7 @@ end
 
 reg vblank_prev;
 always @(posedge clk) begin
-    bit [8:0] v;
+    bit [10:0] v;
     bit [5:0] h;
 
     if (reset) begin
@@ -328,17 +354,24 @@ always @(posedge clk) begin
         if (ce_pixel) begin
             bg_load <= 0;
             fg_load <= 0;
-            unique case(access_cycle)
+            unique case(access_state)
                 FG_ATTRIB0: fg_code <= vram_din;
                 FG_ATTRIB1: begin
-                    v = logical_vcnt[8:0] - fg_y[8:0];
+                    v = logical_vcnt[10:0] - fg_y[10:0];
                     fg_attrib <= vram_din;
-                    fg_rom_address <= { fg_code, v[2:0], 2'd0 };
+                    fg_rom_address <= { 3'd0, fg_code, v[2:0], 2'd0 };
                     fg_rom_req <= 1;
                 end
 
-                CPU_ACCESS_0,
-                CPU_ACCESS_1: begin
+                BG_ATTRIB0: bg_code <= vram_din;
+                BG_ATTRIB1: begin
+                    v = logical_vcnt[10:0] + bg_y[10:0];
+                    bg_attrib <= vram_din;
+                    bg_rom_address <= { bg_code[14:0], v[4:0], 4'd0 } + { 2'b0, bg_code[14:0], v[4:0], 2'd0 };
+                    bg_rom_req <= 5;
+                end
+
+                CPU_ACCESS: begin
                     if (is_pal_access) begin
                         if (ram_access == 2'd2) begin
                             cpu_dout[15:8] <= pal_din;
@@ -359,10 +392,8 @@ always @(posedge clk) begin
                 default: begin end
             endcase
 
-            access_cycle <= next_access_cycle;
-            case(next_access_cycle)
-                CPU_ACCESS_0,
-                CPU_ACCESS_1: begin
+            case(next_access_state)
+                CPU_ACCESS: begin
                     if (ram_pending) begin
                         ram_access <= 2'd2;
                         ram_pending <= 0;
@@ -370,9 +401,13 @@ always @(posedge clk) begin
                 end
 
                 FG_ATTRIB0: begin
-                    bg_load_hcnt <= (logical_hcnt + 11'd16) - bg_hofs;
                     fg_load_hcnt <= (logical_hcnt + 11'd16) - fg_x[10:0];
                 end
+
+                BG_ATTRIB0: begin
+                    bg_load_hcnt <= (logical_hcnt + 11'd64) - bg_hofs;
+                end
+
 
                 default: begin
                 end
@@ -381,23 +416,25 @@ always @(posedge clk) begin
 
         if (rom_req == rom_ack) begin
             if (rom_req_ch == 1) begin
-                bg_load <= 1;
+                bg_load <= bg_rom_req == 0;
+                bg_data <= { rom_data, bg_data[(32*5)-1:32] };
                 rom_req_ch <= 0;
             end else if (rom_req_ch == 2) begin
                 fg_load <= 1;
                 rom_req_ch <= 0;
             end else begin
-                if (bg_rom_req) begin
-                    rom_address <= bg_rom_address;
-                    rom_req <= ~rom_req;
-                    rom_req_ch <= 1;
-                    bg_rom_req <= 0;
-                end else if (fg_rom_req) begin
+                if (fg_rom_req) begin
                     rom_address <= fg_rom_address;
                     rom_req <= ~rom_req;
                     rom_req_ch <= 2;
                     fg_rom_req <= 0;
-                end
+                end else if (bg_rom_req != 0) begin
+                    rom_address <= bg_rom_address;
+                    bg_rom_address <= bg_rom_address + 4;
+                    rom_req <= ~rom_req;
+                    rom_req_ch <= 1;
+                    bg_rom_req <= bg_rom_req - 1;
+                 end
             end
         end
     end

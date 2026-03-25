@@ -606,8 +606,8 @@ assign red = { igs023_color[14:10], igs023_color[14:12] };
 assign green = { igs023_color[9:5], igs023_color[9:7] };
 assign blue = { igs023_color[4:0], igs023_color[4:2] };
 
-wire [20:0] igs023_sdr_addr;
-assign sdr_scn0_addr = TILE_ROM_SDR_BASE[26:0] + { 6'd0, igs023_sdr_addr };
+wire [23:0] igs023_sdr_addr;
+assign sdr_scn0_addr = TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr };
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
