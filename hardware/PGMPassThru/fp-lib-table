@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "PGMPassThru")(type "KiCad")(uri "${KIPRJMOD}/PGMPassThru.pretty")(options "")(descr ""))
+)
