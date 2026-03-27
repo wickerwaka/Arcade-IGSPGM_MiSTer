@@ -343,7 +343,7 @@ logic ROMn;
 logic PROGn;
 logic WORKRAMn;
 logic IGS023n;
-logic IGS026_Z80n;
+logic IGS026_Xn;
 logic IOn;
 
 //wire sdr_dtack_n = sdr_cpu_req != sdr_cpu_ack;
@@ -469,7 +469,7 @@ address_translator address_translator(
     .PROGn,
     .IOn,
     .IGS023n,
-    .IGS026_Z80n,
+    .IGS026_Xn,
 
     .SS_SAVEn,
     .SS_RESETn,
@@ -484,7 +484,7 @@ assign cpu_data_in = ~SS_SAVEn ? ss_irq_handler[cpu_addr[3:0]] :
                      ~WORKRAMn ? workram_q :
                      ~IGS023n ? igs023_q :
                      ~IOn ? io_q :
-                     ~IGS026_Z80n ? igs026_z80_q :
+                     ~IGS026_Xn ? igs026_x_q :
                      16'd0;
 
 wire [15:0] workram_addr;
@@ -532,10 +532,10 @@ m68k_ram #(.WIDTHAD(15)) aram(
 
 m68k_ram_ss_adaptor #(.WIDTHAD(15), .SS_IDX(SSIDX_Z80_RAM)) aram_ss(
     .clk,
-    .addr_in(igs026_z80_aram_addr),
-    .lds_n_in(igs026_z80_aram_lds_n),
-    .uds_n_in(igs026_z80_aram_uds_n),
-    .data_in(igs026_z80_aram_dout),
+    .addr_in(igs026_x_aram_addr),
+    .lds_n_in(igs026_x_aram_lds_n),
+    .uds_n_in(igs026_x_aram_uds_n),
+    .data_in(igs026_x_aram_dout),
 
     .q(aram_q),
 
@@ -668,37 +668,37 @@ IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .ssbus(ssb[3])
 );
 
-wire [15:0] igs026_z80_q;
+wire [15:0] igs026_x_q;
 wire v3021_cs_n, v3021_wr_n;
 wire v3021_din, v3021_dout;
 
-wire [14:0] igs026_z80_aram_addr;
-wire [15:0] igs026_z80_aram_dout;
+wire [14:0] igs026_x_aram_addr;
+wire [15:0] igs026_x_aram_dout;
 
-wire igs026_z80_aram_uds_n, igs026_z80_aram_lds_n;
+wire igs026_x_aram_uds_n, igs026_x_aram_lds_n;
 
-IGS026_Z80 igs026_z80(
+IGS026_X igs026_x(
     .clk,
 
     // CPU interface
     .cpu_addr(cpu_word_addr),
     .cpu_din(cpu_data_out),
-    .cpu_dout(igs026_z80_q),
+    .cpu_dout(igs026_x_q),
     .cpu_lds_n(cpu_ds_n[0]),
     .cpu_uds_n(cpu_ds_n[1]),
     .cpu_rw(cpu_rw),
-    .cpu_cs_n(IGS026_Z80n),
+    .cpu_cs_n(IGS026_Xn),
 
     .v3021_cs_n,
     .v3021_wr_n,
     .v3021_dout(v3021_din),
     .v3021_din(v3021_dout),
 
-    .aram_addr(igs026_z80_aram_addr),
+    .aram_addr(igs026_x_aram_addr),
     .aram_din(aram_q),
-    .aram_dout(igs026_z80_aram_dout),
-    .aram_lds_n(igs026_z80_aram_lds_n),
-    .aram_uds_n(igs026_z80_aram_uds_n)
+    .aram_dout(igs026_x_aram_dout),
+    .aram_lds_n(igs026_x_aram_lds_n),
+    .aram_uds_n(igs026_x_aram_uds_n)
 );
 
 V3021 v3021(

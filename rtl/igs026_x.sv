@@ -1,4 +1,4 @@
-module IGS026_Z80(
+module IGS026_X(
     input clk,
 
     // CPU interface

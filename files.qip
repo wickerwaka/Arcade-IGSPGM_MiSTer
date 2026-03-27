@@ -11,7 +11,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/sdram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/system_consts.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/PGM.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/igs023.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/igs026_z80.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/igs026_x.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/v3021.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/address_translator.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ram.sv
