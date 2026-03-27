@@ -8,6 +8,7 @@ module address_translator(
     input        ss_override,
 
     output logic ROMn,
+    output logic PROGn,
     output logic WORKRAMn,
     output logic IGS023n,
     output logic Z80RAMn,
@@ -29,6 +30,7 @@ endfunction
 
 always_comb begin
     ROMn = 1;
+    PROGn = 1;
     WORKRAMn = 1;
     IGS023n = 1;
     Z80RAMn = 1;
@@ -60,7 +62,7 @@ always_comb begin
     end
 
     if (~&cpu_ds_n) begin
-        ROMn = match_addr_n(cpu_word_addr, 16'h0000, 16'hf000);
+        ROMn = match_addr_n(cpu_word_addr, 16'h0000, 16'h8000);
         WORKRAMn = match_addr_n(cpu_word_addr, 16'h8000, 16'hf000);
         IGS023n = match_addr_n(cpu_word_addr, 16'h9000, 16'hff00) & match_addr_n(cpu_word_addr, 16'ha000, 16'hff00) & match_addr_n(cpu_word_addr, 16'hb000, 16'hff00);
         Z80REGn = match_addr_n(cpu_word_addr, 16'hc000, 16'hffff);

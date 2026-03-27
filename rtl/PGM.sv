@@ -340,6 +340,7 @@ end
 //// CHIP SELECTS
 
 logic ROMn;
+logic PROGn;
 logic WORKRAMn;
 logic IGS023n;
 logic Z80RAMn;
@@ -402,6 +403,17 @@ jtframe_frac_cen #(2) audio_cen
     .cenb()
 );
 
+wire ce_16khz, ce_32khz;
+jtframe_frac_cen #(2) rtc_cen
+(
+    .clk(clk),
+    .cen_in(ce_4m),
+    .n(10'd1),
+    .m(10'd114),
+    .cen({ce_16khz, ce_32khz}),
+    .cenb()
+);
+
 //////////////////////////////////
 //// CPU
 
@@ -455,6 +467,7 @@ address_translator address_translator(
 
     .WORKRAMn,
     .ROMn,
+    .PROGn,
     .IOn,
     .IGS023n,
     .Z80REGn,
@@ -469,10 +482,12 @@ assign cpu_data_in = ~SS_SAVEn ? ss_irq_handler[cpu_addr[3:0]] :
                      ~SS_RESETn ? ss_reset_vector[cpu_addr[1:0]] :
                      ~SS_VECn ? ( cpu_addr[0] ? 16'h0000 : 16'h00ff ) :
                      ~ROMn ? rom_q :
+                     ~PROGn ? rom_q :
                      ~WORKRAMn ? workram_q :
                      ~Z80RAMn ? z80ram_q :
                      ~IGS023n ? igs023_q :
                      ~IOn ? io_q :
+                     ~Z80REGn ? igs026_z80_q :
                      16'd0;
 
 wire [15:0] workram_addr;
@@ -654,6 +669,39 @@ IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .vblank,
 
     .ssbus(ssb[3])
+);
+
+wire [15:0] igs026_z80_q;
+wire v3021_cs_n, v3021_wr_n;
+wire v3021_din, v3021_dout;
+
+IGS026_Z80 igs026_z80(
+    .clk,
+
+    // CPU interface
+    .cpu_addr(cpu_word_addr),
+    .cpu_din(cpu_data_out),
+    .cpu_dout(igs026_z80_q),
+    .cpu_lds_n(cpu_ds_n[0]),
+    .cpu_uds_n(cpu_ds_n[1]),
+    .cpu_rw(cpu_rw),
+    .cpu_cs_n(Z80REGn),
+
+    .v3021_cs_n,
+    .v3021_wr_n,
+    .v3021_dout(v3021_din),
+    .v3021_din(v3021_dout)
+);
+
+V3021 v3021(
+    .clk,
+    .ce_32khz,
+
+    .cs_n(v3021_cs_n),
+    .wr_n(v3021_wr_n),
+
+    .in(v3021_din),
+    .out(v3021_dout)
 );
 
 logic [15:0] io_q;

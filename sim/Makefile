@@ -70,6 +70,8 @@ HDL_SRC += ../rtl/ram.sv ../rtl/jtframe_frac_cen.v ../rtl/memory_stream.sv ../rt
 HDL_SRC += ../rtl/audio_mix.sv ../sys/iir_filter.v
 HDL_SRC += ../rtl/rom_loader.sv
 HDL_SRC += ../rtl/igs023.sv
+HDL_SRC += ../rtl/igs026_z80.sv
+HDL_SRC += ../rtl/v3021.sv
 HDL_SRC += sim_top.sv
 HDL_SRC += verilator.vlt
 

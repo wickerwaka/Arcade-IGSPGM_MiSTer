@@ -13,6 +13,8 @@
 
 static const char *game_names[N_GAMES] = {
     "pgm",
+    "testbios",
+    "espgalbl",
 };
 
 game_t game_find(const char *name)
@@ -45,15 +47,47 @@ static void load_pgm()
     gSimCore.SetGame(GAME_PGM);
 }
 
+static void load_testbios()
+{
+    g_fs.addSearchPath("../roms/pgm.zip");
+
+    gSimCore.mSDRAM->load_data("testbios.bin", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+
+    gSimCore.SetGame(GAME_PGM);
+}
+
+
+static void load_espgalbl()
+{
+    g_fs.addSearchPath("../roms/pgm.zip");
+    g_fs.addSearchPath("../roms/espgalbl.zip");
+    g_fs.addSearchPath("../roms/espgal.zip");
+
+    gSimCore.mSDRAM->load_data("espgaluda_u8.bin", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("cave_t04801w064.u19", TILE_ROM_SDR_BASE + 0x180000, 1);
+
+    gSimCore.SetGame(GAME_PGM);
+}
+
+
 bool game_init(game_t game)
 {
     g_fs.clearSearchPaths();
     g_fs.addSearchPath(".");
+    g_fs.addSearchPath("../roms");
 
     switch (game)
     {
     case GAME_PGM:
         load_pgm();
+        break;
+    case GAME_TESTBIOS:
+        load_testbios();
+        break;
+    case GAME_ESPGALBL:
+        load_espgalbl();
         break;
     default:
         return false;

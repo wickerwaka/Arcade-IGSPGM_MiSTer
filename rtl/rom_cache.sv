@@ -61,7 +61,7 @@ always_ff @(posedge clk) begin
                 state <= READY;
             end else begin
                 if (~extra_rom_n) begin
-                    sdr_addr <= CPU_ROM_SDR_BASE[26:0] + { 7'b0, cpu_addr[18:2], 3'b000 };
+                    sdr_addr <= CPU_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2], 3'b000 };
                 end else begin
                     sdr_addr <= CPU_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2], 3'b000 };
                 end
