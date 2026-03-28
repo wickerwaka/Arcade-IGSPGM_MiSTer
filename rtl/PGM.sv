@@ -677,8 +677,15 @@ wire [15:0] igs026_x_aram_dout;
 
 wire igs026_x_aram_uds_n, igs026_x_aram_lds_n;
 
+wire z80_reset_n, z80_wait_n, z80_int_n, z80_nmi_n;
+wire z80_mreq_n, z80_iorq_n, z80_rd_n, z80_wr_n;
+wire [15:0] z80_addr;
+wire [7:0] z80_din;
+wire [7:0] z80_dout;
+
 IGS026_X igs026_x(
     .clk,
+    .reset,
 
     // CPU interface
     .cpu_addr(cpu_word_addr),
@@ -698,7 +705,19 @@ IGS026_X igs026_x(
     .aram_din(aram_q),
     .aram_dout(igs026_x_aram_dout),
     .aram_lds_n(igs026_x_aram_lds_n),
-    .aram_uds_n(igs026_x_aram_uds_n)
+    .aram_uds_n(igs026_x_aram_uds_n),
+
+    .z80_reset_n,
+    .z80_wait_n,
+    .z80_int_n,
+    .z80_nmi_n,
+    .z80_mreq_n,
+    .z80_iorq_n,
+    .z80_rd_n,
+    .z80_wr_n,
+    .z80_addr,
+    .z80_din(z80_dout),
+    .z80_dout(z80_din)
 );
 
 V3021 v3021(
@@ -751,7 +770,6 @@ always_ff @(posedge clk) begin
     prev_ds_n <= cpu_as_n;
 end
 
-`ifdef Z80
 `ifdef USE_AUTO_SS
 wire [31:0] z80_ss_in, z80_ss_out;
 wire z80_ss_wr, z80_ss_rd, z80_ss_ack;
@@ -786,24 +804,23 @@ tv80s z80(
 
     .clk(clk),
     .cen(ce_4m),
-    .reset_n(SNRESn),
-    .wait_n(1),
-    .int_n(SNINTn),
-    .nmi_n(1),
+    .reset_n(z80_reset_n),
+    .wait_n(z80_wait_n),
+    .int_n(z80_int_n),
+    .nmi_n(z80_nmi_n),
     .busrq_n(1),
     .m1_n(),
-    .mreq_n(SNMREQn),
-    .iorq_n(),
-    .rd_n(SNRDn),
-    .wr_n(SNWRn),
+    .mreq_n(z80_mreq_n),
+    .iorq_n(z80_iorq_n),
+    .rd_n(z80_rd_n),
+    .wr_n(z80_wr_n),
     .rfsh_n(),
     .halt_n(),
     .busak_n(),
-    .A(SND_ADD),
+    .A(z80_addr),
     .di(z80_din),
     .dout(z80_dout)
 );
-`endif
 
 save_state_data save_state_data(
     .clk,
