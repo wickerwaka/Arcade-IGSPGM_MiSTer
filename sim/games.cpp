@@ -43,6 +43,7 @@ static void load_pgm()
 
     gSimCore.mSDRAM->load_data("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
     gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }

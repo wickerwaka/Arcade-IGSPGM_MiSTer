@@ -82,3 +82,70 @@ always_ff @(posedge clk) begin
 end
 
 endmodule
+
+module rom_cache2(
+    input clk,
+
+    output reg [26:0]   sdr_addr,
+    input [63:0]        sdr_data,
+    output reg          sdr_req,
+    input               sdr_ack,
+
+    input  [26:0]       addr,
+    input               read,
+    output logic [15:0] data,
+    output              data_valid
+);
+
+localparam CACHE_WIDTH = 10;
+
+wire [26-CACHE_WIDTH-3:0] tag = addr[26:CACHE_WIDTH+3];
+wire [CACHE_WIDTH-1:0] index = addr[CACHE_WIDTH+2:3];
+
+reg [63:0] cache_data[2**CACHE_WIDTH];
+reg [26-CACHE_WIDTH-3:0] cache_tag[2**CACHE_WIDTH];
+
+reg [63:0] cache_line;
+reg [26-CACHE_WIDTH-3:0] cached_tag;
+
+always_comb begin
+    unique case(addr[1:0])
+    2'b00: data = cache_line[15:0];
+    2'b01: data = cache_line[31:16];
+    2'b10: data = cache_line[47:32];
+    2'b11: data = cache_line[63:48];
+    endcase
+end
+
+enum { IDLE, CACHE_CHECK, SDR_WAIT } state = IDLE;
+
+reg [26:0] addr2;
+assign data_valid = tag == cached_tag;
+
+always_ff @(posedge clk) begin
+    cache_line <= cache_data[index];
+    cached_tag <= cache_tag[index];
+
+    if (read && state == IDLE) begin
+        state <= CACHE_CHECK;
+    end else if (state == CACHE_CHECK) begin
+        if (cached_tag == tag) begin
+            state <= IDLE;
+        end else begin
+            sdr_addr <= { addr[26:3], 3'b000 };
+            addr2 <= addr;
+            sdr_req <= ~sdr_req;
+            state <= SDR_WAIT;
+        end
+    end else if (state == SDR_WAIT) begin
+        if (sdr_req == sdr_ack) begin
+            cache_tag[index] <= addr2[26:CACHE_WIDTH+3];
+            cache_data[index] <= sdr_data;
+            cache_line <= sdr_data;
+            cached_tag <= addr2[26:CACHE_WIDTH+3];
+            state <= IDLE;
+        end
+    end
+end
+
+endmodule

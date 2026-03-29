@@ -28,6 +28,9 @@ enum class MemoryRegion : int
     WORK_RAM,
     AUDIO_RAM,
     TILE_ROM,
+    MUSIC_ROM,
+    B_ROM,
+    A_ROM,
 
     COUNT
 };

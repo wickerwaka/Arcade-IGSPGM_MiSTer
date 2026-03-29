@@ -46,7 +46,7 @@ module PGM(
     input             sdr_scn_mux_ack,
 
     output reg [26:0] sdr_audio_addr,
-    input      [15:0] sdr_audio_q,
+    input      [63:0] sdr_audio_q,
     output reg        sdr_audio_req,
     input             sdr_audio_ack,
 
@@ -86,7 +86,7 @@ ddr_mux ddr_mux(
 //// Clock Enable Signals
 wire ce_20m, ce_dummy_10m;
 reg ce_cpu, ce_cpu_180;
-wire ce_8m, ce_4m;
+wire ce_8m, ce_16m, ce_33m;
 wire ce_50m = 1;
 /////////////////////////////
 
@@ -392,13 +392,13 @@ always_ff @(posedge clk) begin
     end
 end
 
-jtframe_frac_cen #(2) audio_cen
+jtframe_frac_cen #(3) audio_cen
 (
     .clk(clk),
     .cen_in(~obj_paused | ss_cpu_execute),
-    .n(10'd137),
-    .m(10'd914),
-    .cen({ce_4m, ce_8m}),
+    .n(10'd464),
+    .m(10'd685),
+    .cen({ce_8m, ce_16m, ce_33m}),
     .cenb()
 );
 
@@ -406,9 +406,9 @@ wire ce_16khz, ce_32khz;
 jtframe_frac_cen #(2) rtc_cen
 (
     .clk(clk),
-    .cen_in(ce_4m),
+    .cen_in(ce_8m),
     .n(10'd1),
-    .m(10'd114),
+    .m(10'd228),
     .cen({ce_16khz, ce_32khz}),
     .cenb()
 );
@@ -683,6 +683,30 @@ wire [15:0] z80_addr;
 wire [7:0] z80_din;
 wire [7:0] z80_dout;
 
+wire [1:0] ics2115_addr;
+wire [7:0] ics2115_din, ics2115_dout;
+wire ics2115_cs_n, ics2115_rd_n, ics2115_wr_n;
+wire ics2115_irq, ics2115_ready;
+wire ics2115_reset_n;
+
+wire [23:0] ics2115_rom_addr;
+wire [15:0] ics2115_rom_q;
+wire        ics2115_rom_read;
+
+rom_cache2 audio_romcache(
+    .clk,
+
+    .sdr_addr(sdr_audio_addr),
+    .sdr_data(sdr_audio_q),
+    .sdr_req(sdr_audio_req),
+    .sdr_ack(sdr_audio_ack),
+
+    .addr(MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr}),
+    .read(ics2115_rom_read),
+    .data(ics2115_rom_q),
+    .data_valid()
+);
+
 IGS026_X igs026_x(
     .clk,
     .reset,
@@ -717,7 +741,17 @@ IGS026_X igs026_x(
     .z80_wr_n,
     .z80_addr,
     .z80_din(z80_dout),
-    .z80_dout(z80_din)
+    .z80_dout(z80_din),
+
+    .ics2115_reset_n,
+    .ics2115_addr,
+    .ics2115_din(ics2115_dout),
+    .ics2115_dout(ics2115_din),
+    .ics2115_cs_n,
+    .ics2115_rd_n,
+    .ics2115_wr_n,
+    .ics2115_irq,
+    .ics2115_ready
 );
 
 V3021 v3021(
@@ -729,6 +763,29 @@ V3021 v3021(
 
     .in(v3021_din),
     .out(v3021_dout)
+);
+
+
+ics2115 ics2115(
+    .clk,
+    .ce(ce_33m),
+    .reset_n(ics2115_reset_n),
+    .host_addr(ics2115_addr),
+    .host_din(ics2115_din),
+    .host_dout(ics2115_dout),
+    .host_cs_n(ics2115_cs_n),
+    .host_rd_n(ics2115_rd_n),
+    .host_wr_n(ics2115_wr_n),
+    .host_irq(ics2115_irq),
+    .host_ready(ics2115_ready),
+
+    .rom_addr(ics2115_rom_addr),
+    .rom_data(ics2115_rom_q),
+    .rom_rd(ics2115_rom_read),
+
+    .audio_left(audio_out),
+    .audio_right(),
+    .audio_valid()
 );
 
 logic [15:0] io_q;
@@ -803,7 +860,7 @@ tv80s z80(
 `endif
 
     .clk(clk),
-    .cen(ce_4m),
+    .cen(ce_8m),
     .reset_n(z80_reset_n),
     .wait_n(z80_wait_n),
     .int_n(z80_int_n),

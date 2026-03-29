@@ -13,7 +13,11 @@ VERILATED_DIR = verilated
 GAME ?= pgm
 
 VERILATOR = verilator
-VERILATOR_ARGS = --cc --make gmake --trace-fst --Mdir $(VERILATED_DIR) -Ihdl --MMD --MP -Wno-TIMESCALEMOD
+VERILATOR_ARGS = --cc --make gmake --trace-fst --Mdir $(VERILATED_DIR) -Ihdl --MMD --MP \
+				-Wno-TIMESCALEMOD \
+				-Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+          		-Wno-CASEINCOMPLETE -Wno-UNUSEDSIGNAL
+
 PYTHON = python3
 
 VERILATOR_INC = $(shell pkg-config --variable=includedir verilator)
@@ -73,6 +77,7 @@ HDL_SRC += ../rtl/rom_loader.sv
 HDL_SRC += ../rtl/igs023.sv
 HDL_SRC += ../rtl/igs026_x.sv
 HDL_SRC += ../rtl/v3021.sv
+HDL_SRC += ../rtl/ics2115/ics2115_pkg.sv ../rtl/ics2115/ics2115.sv ../rtl/ics2115/ics2115_osc.sv ../rtl/ics2115/ics2115_tables.sv
 HDL_SRC += sim_top.sv
 HDL_SRC += verilator.vlt
 

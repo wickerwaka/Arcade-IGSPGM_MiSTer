@@ -16,6 +16,7 @@ enum game_t : uint8_t
 
 static const uint32_t CPU_ROM_SDR_BASE = 0x00000000;
 static const uint32_t TILE_ROM_SDR_BASE = 0x01000000;
+static const uint32_t MUSIC_ROM_SDR_BASE = 0x02000000;
 
 game_t game_find(const char *name);
 const char *game_name(game_t game);

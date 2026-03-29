@@ -28,6 +28,11 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/mame_keys.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/coin_pulse.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video_timing.sv
 
+set_global_assignment -name SYSTEMVERILOG_FILE ./rtl/ics2115/ics2115_pkg.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ./rtl/ics2115/ics2115.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ./rtl/ics2115/ics2115_tables.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ./rtl/ics2115/ics2115_osc.sv
+
 if (1) {
     set_global_assignment -name VERILOG_MACRO "USE_AUTO_SS=1"
     set_global_assignment -name SYSTEMVERILOG_FILE ./rtl/tv80_auto_ss.sv

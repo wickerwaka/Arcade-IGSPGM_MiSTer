@@ -21,5 +21,7 @@
 		<part name="pgm_p02s.u20"/>
 		<part>01200000</part>
 		<part name="pgm_t01s.rom"/>
+		<part>02200000</part>
+		<part name="pgm_m01s.rom"/>
 	</rom>
 </misterromdescription>

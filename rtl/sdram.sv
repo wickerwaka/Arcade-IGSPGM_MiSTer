@@ -43,7 +43,7 @@ module sdram
     output reg        ch1_ack,
 
     input      [26:0] ch2_addr,
-    output reg [15:0] ch2_dout,
+    output reg [63:0] ch2_dout,
     input             ch2_req,
     output reg        ch2_ack,
 
@@ -163,7 +163,10 @@ always @(posedge clk) begin
     if(data_ready_delay1[3]) ch1_ack <= ch1_req;
 
     if(data_ready_delay2[4]) ch2_dout[15:00] <= dq_reg;
-    if(data_ready_delay2[4]) ch2_ack <= ch2_req;
+    if(data_ready_delay2[3]) ch2_dout[31:16] <= dq_reg;
+    if(data_ready_delay2[2]) ch2_dout[47:32] <= dq_reg;
+    if(data_ready_delay2[1]) ch2_dout[63:48] <= dq_reg;
+    if(data_ready_delay2[1]) ch2_ack <= ch2_req;
 
     if(data_ready_delay3[4]) ch3_dout[15:00] <= dq_reg;
     if(data_ready_delay3[3]) ch3_dout[31:16] <= dq_reg;
