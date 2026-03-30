@@ -351,7 +351,7 @@ module ics2115
 
     always_comb begin
         reg_read_data = 16'd0;
-		  irqv_found = 0;
+        irqv_found = 1'b0;
 
         if (reg_select < 8'h20) begin
             case (reg_select[4:0])
@@ -391,9 +391,9 @@ module ics2115
                 5'h0A: reg_read_data = voice_regs[osc_select].osc_acc[28:13];
 
                 // 0x0B: Wavesample address low — MAME returns (acc >> 0) & 0xFFF8
-                // Our 29-bit acc maps: MAME bits [15:0] = our bits [15:0].
-                // Mask 0xFFF8 clears bits [2:0]. So return {osc_acc[15:3], 3'b000}.
-                5'h0B: reg_read_data = {voice_regs[osc_select].osc_acc[15:3], 3'b000};
+                // Our 29-bit acc maps: MAME bits [15:3] → our bits [12:0]
+                // Mask 0xFFF8 clears bottom 3 bits. Return {osc_acc[12:0], 3'b000}.
+                5'h0B: reg_read_data = {voice_regs[osc_select].osc_acc[12:0], 3'b000};
 
                 // 0x0C: Pan — pan value in high byte
                 5'h0C: reg_read_data = {voice_regs[osc_select].vol_pan, 8'h00};

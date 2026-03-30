@@ -121,9 +121,9 @@ module ics2115_osc
             osc_left_pre = $signed({1'b0, voice_in.osc_end}) - $signed({1'b0, voice_in.osc_acc});
     end
 
-    // Interpolation fraction: acc[11:3] = 9-bit
+    // Interpolation fraction: acc[8:0] = 9-bit (29-bit storage, not MAME's 32-bit [11:3])
     logic [8:0] interp_fract;
-    assign interp_fract = v.osc_acc[11:3];
+    assign interp_fract = v.osc_acc[8:0];
 
     // Interpolation: combinational from sample1, sample2, fract
     logic signed [15:0] interp_diff;
@@ -267,22 +267,20 @@ module ics2115_osc
                     else
                         vol_tbl_addr <= 12'd0;
 
-                    // MAME: curaddr = osc.acc >> 12
-                    // acc is 29-bit 20.9 format. acc>>12 = acc[28:12] = 17 bits
-                    // Padded to 20 bits for ROM addr construction
-                    cur_addr <= {3'd0, v.osc_acc[28:12]};
+                    // acc is 29-bit 20.9 format. acc[28:9] = 20-bit integer address
+                    cur_addr <= v.osc_acc[28:9];
 
                     // Compute next_addr for interpolation
-                    // If near loop end (forward, non-bidir), wrap to start>>12
+                    // If near loop end (forward, non-bidir), wrap to start[28:9]
                     if (v.state_on && v.osc_conf[OSC_LOOP] && !v.osc_conf[OSC_BIDIR] &&
                         (osc_left_pre < $signed({12'd0, v.osc_fc, 2'b00})))
                     begin
-                        next_addr <= {3'd0, v.osc_start[28:12]};
+                        next_addr <= v.osc_start[28:9];
                     end else begin
                         if (v.osc_conf[OSC_EIGHTBIT] || v.osc_conf[OSC_ULAW])
-                            next_addr <= {3'd0, v.osc_acc[28:12]} + 20'd1;
+                            next_addr <= v.osc_acc[28:9] + 20'd1;
                         else
-                            next_addr <= {3'd0, v.osc_acc[28:12]} + 20'd2;
+                            next_addr <= v.osc_acc[28:9] + 20'd2;
                     end
                 end
 
