@@ -48,7 +48,7 @@ package ics2115_pkg;
     // Voice state structure — packed struct with explicit bit widths per spec §2
     //
     // osc_acc:   29-bit (20.9 fixed-point) — sample position accumulator
-    // osc_fc:    16-bit (6.9+1) — frequency counter
+    // osc_fc:    16-bit frequency counter (bit 0 unused, always 0)
     // osc_start: 29-bit (20.9) — loop start address
     // osc_end:   29-bit (20.9) — loop end address
     // osc_saddr: 8-bit — static address bank selector (bits 27-20 of ROM addr)
@@ -69,7 +69,7 @@ package ics2115_pkg;
     typedef struct packed {
         // Oscillator fields
         logic [28:0] osc_acc;     // 20.9 fixed-point address accumulator
-        logic [15:0] osc_fc;      // 6.9+1 frequency counter
+        logic [15:0] osc_fc;      // frequency counter (bit 0 unused, step = fc[15:1])
         logic [28:0] osc_start;   // loop start address (20.9)
         logic [28:0] osc_end;     // loop end address (20.9)
         logic [7:0]  osc_saddr;   // sample bank address (bits 27-20)

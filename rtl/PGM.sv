@@ -692,6 +692,7 @@ wire ics2115_reset_n;
 wire [22:0] ics2115_rom_addr;
 wire [15:0] ics2115_rom_q;
 wire        ics2115_rom_read;
+wire        ics2115_data_valid;
 
 rom_cache2 audio_romcache(
     .clk,
@@ -704,7 +705,7 @@ rom_cache2 audio_romcache(
     .addr(MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr[22:0], 1'b0}),
     .read(ics2115_rom_read),
     .data(ics2115_rom_q),
-    .data_valid()
+    .data_valid(ics2115_data_valid)
 );
 
 IGS026_X igs026_x(
@@ -782,6 +783,8 @@ ics2115 ics2115(
     .rom_addr(ics2115_rom_addr),
     .rom_data(ics2115_rom_q),
     .rom_rd(ics2115_rom_read),
+    .rom_voice_id(),
+    .rom_data_valid(ics2115_rom_read),
 
     .audio_left(audio_out),
     .audio_right(),

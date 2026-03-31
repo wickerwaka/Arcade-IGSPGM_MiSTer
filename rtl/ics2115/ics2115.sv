@@ -20,10 +20,12 @@ module ics2115
     output logic        host_irq,
     output logic        host_ready,
 
-    // ROM interface (16-bit wide, synchronous, 1-cycle latency)
-    output logic [22:0] rom_addr,    // word address
+    // ROM interface (16-bit wide, synchronous, variable latency)
+    output logic [22:0] rom_addr,       // word address
     input  logic [15:0] rom_data,
     output logic        rom_rd,
+    input  logic        rom_data_valid, // handshake: data is valid this cycle
+    output logic [4:0]  rom_voice_id,   // current voice being processed
 
     // Audio output (parallel, directly captured by testbench)
     output logic signed [15:0] audio_left,
@@ -192,6 +194,7 @@ module ics2115
         .rom_byte_addr (osc_rom_byte_addr),
         .rom_rd        (osc_rom_rd),
         .rom_data      (rom_data),
+        .rom_data_valid(rom_data_valid),
         .vol_tbl_addr  (osc_vol_tbl_addr),
         .vol_tbl_data  (vol_tbl_data),
         .pan_tbl_addr  (osc_pan_tbl_addr),
@@ -209,8 +212,9 @@ module ics2115
     assign ulaw_tbl_addr = osc_ulaw_tbl_addr;
 
     // ROM address translation: byte address → word address
-    assign rom_addr = osc_rom_byte_addr[23:1];
-    assign rom_rd   = osc_rom_rd;
+    assign rom_addr    = osc_rom_byte_addr[23:1];
+    assign rom_rd      = osc_rom_rd;
+    assign rom_voice_id = seq_voice_idx;
 
     // Sequencer FSM — drives osc_start, accumulates audio, signals write-back
     always_ff @(posedge clk or negedge reset_n) begin
@@ -299,21 +303,6 @@ module ics2115
     end
 
     // =========================================================================
-    // Host bus write detection
-    // =========================================================================
-    logic host_wr_pulse;
-    logic host_wr_prev;
-
-    assign host_wr_pulse = ~host_cs_n & ~host_wr_n & host_wr_prev;
-
-    always_ff @(posedge clk or negedge reset_n) begin
-        if (!reset_n)
-            host_wr_prev <= 1'b1;
-        else
-            host_wr_prev <= host_cs_n | host_wr_n;
-    end
-
-    // =========================================================================
     // Host bus read detection
     // =========================================================================
     logic host_rd_pulse;
@@ -351,7 +340,7 @@ module ics2115
 
     always_comb begin
         reg_read_data = 16'd0;
-        irqv_found = 1'b0;
+        irqv_found = 0;
 
         if (reg_select < 8'h20) begin
             case (reg_select[4:0])
@@ -521,6 +510,7 @@ module ics2115
             2'd0: begin
                 // Port 0: IRQ status — MAME read() case 0
                 host_dout = 8'd0;
+                host_dout[6] = host_write_collision;  // bit 6: voice busy (sequencer collision)
                 if (irq_on) begin
                     host_dout[7] = 1'b1;  // bit 7: any IRQ active
                     if (irq_enabled != 8'd0 && (irq_pending & 8'h03) != 8'h00)
@@ -536,7 +526,16 @@ module ics2115
         endcase
     end
 
-    assign host_ready = 1'b1;
+    // Host bus busy when an active write targets a per-voice register for the
+    // voice currently being processed by the sequencer FSM.  Only applies when
+    // CS is asserted and the host is writing to port 2 or 3 (the data ports).
+    wire voice_busy = (seq_state == SEQ_LOAD || seq_state == SEQ_WAIT || seq_state == SEQ_STORE);
+    wire host_write_collision = voice_busy
+                             && (osc_select == seq_voice_idx)
+                             && (reg_select < 8'h20)
+                             && ~host_cs_n
+                             && (host_addr == 2'd2 || host_addr == 2'd3);
+    assign host_ready = !host_write_collision;
     // host_irq driven by recalc_irq logic above
 
     // =========================================================================
@@ -591,7 +590,7 @@ module ics2115
             end
 
             // ── Host bus port writes ──
-            if (host_wr_pulse) begin
+            if (~host_wr_n & ~host_cs_n) begin
                 case (host_addr)
                     2'd1: begin
                         reg_select <= host_din[7:0];
@@ -642,7 +641,7 @@ module ics2115
                         // Low-byte write — per-voice registers that need low byte
                         if (reg_select < 8'h20) begin
                             case (reg_select[4:0])
-                                5'h01: voice_regs[osc_select].osc_fc[7:0]      <= host_din[7:0];
+                                5'h01: voice_regs[osc_select].osc_fc[7:0]      <= {host_din[7:1], 1'b0};
                                 5'h02: voice_regs[osc_select].osc_start[20:13]  <= host_din[7:0];
                                 5'h04: voice_regs[osc_select].osc_end[20:13]    <= host_din[7:0];
                                 5'h07: voice_regs[osc_select].vol_start         <= {host_din[7:0], 18'd0};

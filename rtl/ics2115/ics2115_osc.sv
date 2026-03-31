@@ -34,7 +34,8 @@ module ics2115_osc
     // ROM interface — top-level translates byte addr to word addr
     output logic [23:0] rom_byte_addr,  // 24-bit byte address
     output logic        rom_rd,         // read strobe
-    input  logic [15:0] rom_data,       // 16-bit word from ROM (1-cycle latency)
+    input  logic [15:0] rom_data,       // 16-bit word from ROM
+    input  logic        rom_data_valid, // handshake: data is valid this cycle
 
     // Table interfaces — directly wired to ics2115_tables
     output logic [11:0] vol_tbl_addr,
@@ -167,9 +168,9 @@ module ics2115_osc
             ST_PAN_LOOKUP_R:   state_next = ST_VOL_WAIT_L;
             ST_VOL_WAIT_L:     state_next = ST_SAMPLE_FETCH_1;
             ST_SAMPLE_FETCH_1: state_next = ST_VOL_WAIT_R;
-            ST_VOL_WAIT_R:     state_next = ST_SAMPLE_FETCH_2;
+            ST_VOL_WAIT_R:     if (rom_data_valid) state_next = ST_SAMPLE_FETCH_2;
             ST_SAMPLE_FETCH_2: state_next = ST_SAMPLE_WAIT;
-            ST_SAMPLE_WAIT:    state_next = ST_INTERPOLATE;
+            ST_SAMPLE_WAIT:    if (rom_data_valid) state_next = ST_INTERPOLATE;
             ST_INTERPOLATE:    state_next = ST_MIX;
             ST_MIX:            state_next = ST_OSC_UPDATE;
             ST_OSC_UPDATE:     state_next = ST_BOUNDARY_CHECK;
@@ -273,7 +274,7 @@ module ics2115_osc
                     // Compute next_addr for interpolation
                     // If near loop end (forward, non-bidir), wrap to start[28:9]
                     if (v.state_on && v.osc_conf[OSC_LOOP] && !v.osc_conf[OSC_BIDIR] &&
-                        (osc_left_pre < $signed({12'd0, v.osc_fc, 2'b00})))
+                        (osc_left_pre < $signed({15'd0, v.osc_fc[15:1]})))
                     begin
                         next_addr <= v.osc_start[28:9];
                     end else begin
@@ -425,13 +426,15 @@ module ics2115_osc
 
                 // ─────────────────────────────────────────────────────────────
                 // OSC_UPDATE: Advance oscillator accumulator (spec §6.1)
+                // fc bit 0 is unused; MAME uses fc<<2 on 32-bit acc,
+                // equivalent to fc>>1 in 29-bit space. Step = fc[15:1].
                 // ─────────────────────────────────────────────────────────────
                 ST_OSC_UPDATE: begin
                     if (voice_playing) begin
                         if (v.osc_conf[OSC_INVERT])
-                            v.osc_acc <= v.osc_acc - {11'd0, v.osc_fc, 2'b00};
+                            v.osc_acc <= v.osc_acc - {14'd0, v.osc_fc[15:1]};
                         else
-                            v.osc_acc <= v.osc_acc + {11'd0, v.osc_fc, 2'b00};
+                            v.osc_acc <= v.osc_acc + {14'd0, v.osc_fc[15:1]};
                     end
                 end
 
