@@ -704,7 +704,7 @@ rom_cache2 audio_romcache(
 
     .addr(MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr[22:0], 1'b0}),
     .read(ics2115_rom_read),
-    .data(ics2115_rom_q),
+    .data({ics2115_rom_q[7:0], ics2115_rom_q[15:8]}),
     .data_valid(ics2115_data_valid)
 );
 
@@ -784,7 +784,7 @@ ics2115 ics2115(
     .rom_data(ics2115_rom_q),
     .rom_rd(ics2115_rom_read),
     .rom_voice_id(),
-    .rom_data_valid(ics2115_rom_read),
+    .rom_data_valid(ics2115_data_valid),
 
     .audio_left(audio_out),
     .audio_right(),

@@ -407,7 +407,7 @@ wire sdr_ch1_req, sdr_ch2_req, sdr_ch4_req;
 wire sdr_ch1_ack, sdr_ch2_ack, sdr_ch4_ack;
 wire [31:0] sdr_ch1_dout;
 
-wire [15:0] sdr_ch2_dout;
+wire [63:0] sdr_ch2_dout;
 
 wire [63:0] sdr_ch3_dout;
 wire sdr_ch3_ack;
