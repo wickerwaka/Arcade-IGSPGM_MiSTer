@@ -359,7 +359,7 @@ wire [2:0] IPLn;
 wire DTACKn = dtack_n;
 
 wire irq6;
-wire irq4 = 0;
+wire irq4;
 
 //////////////////////////////////
 //// CLOCK ENABLES
@@ -656,7 +656,8 @@ IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .rom_req(sdr_scn0_req),
     .rom_ack(sdr_scn0_ack),
 
-    .vblank_irq(irq6),
+    .irq6(irq6),
+    .irq4(irq4),
 
     // Video interface
     .color(igs023_color),

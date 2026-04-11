@@ -80,7 +80,8 @@ module IGS023 #(parameter SS_IDX=-1) (
     output reg        rom_req,
     input             rom_ack,
 
-    output reg        vblank_irq,
+    output reg        irq6,
+    output reg        irq4,
 
     // Video interface
     output reg [14:0] color,
@@ -315,6 +316,12 @@ always_comb begin
 end
 
 reg vblank_prev;
+reg hblank_prev;
+
+wire irq6_en = ctrl[14][3];
+wire irq4_en = ctrl[14][2];
+
+reg [5:0] irq4_cnt;
 always @(posedge clk) begin
     bit [10:0] v;
     bit [5:0] h;
@@ -323,14 +330,38 @@ always @(posedge clk) begin
         dtack_n <= 1;
         ram_pending <= 0;
         ram_access <= 0;
-        vblank_irq <= 0;
+        irq6 <= 0;
+        irq4 <= 0;
     end begin
-        
+       
+        // IRQ Generation
         vblank_prev <= vblank;
-        if (vblank & ~vblank_prev) vblank_irq <= 1;
-        if (ctrl[14][3]) begin
-            vblank_irq <= 0;
-            ctrl[14][3] <= 0;
+        hblank_prev <= hblank;
+        if (vblank & ~vblank_prev & irq6_en) begin
+            irq6 <= 1;
+        end
+
+        if (~irq6_en) begin
+            irq6 <= 0;
+        end
+
+        if (~irq4_en) begin
+            irq4 <= 0;
+            irq4_cnt <= 0;
+        end
+
+        if (~vblank & vblank_prev) begin
+            ctrl[7] <= 0;
+        end else if (hblank & ~hblank_prev) begin
+            ctrl[7] <= ctrl[7] + 1;
+
+            if (irq4_en) begin
+                if (irq4_cnt == 61) begin
+                    irq4 <= 1;
+                end else begin
+                    irq4_cnt <= irq4_cnt + 1;
+                end
+            end
         end
 
         // CPU interface handling

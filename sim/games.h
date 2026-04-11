@@ -7,6 +7,7 @@ enum game_t : uint8_t
 {
     GAME_PGM = 0,
     GAME_TESTBIOS,
+    GAME_PGM_TEST,
     GAME_ESPGALBL,
 
     N_GAMES,

@@ -14,6 +14,7 @@
 static const char *game_names[N_GAMES] = {
     "pgm",
     "testbios",
+    "pgm_test",
     "espgalbl",
 };
 
@@ -48,6 +49,19 @@ static void load_pgm()
     gSimCore.SetGame(GAME_PGM);
 }
 
+static void load_pgm_test()
+{
+    g_fs.addSearchPath("../testroms/build/pgm_test/pgm/");
+    g_fs.addSearchPath("../roms/pgm.zip");
+
+    gSimCore.mSDRAM->load_data("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->load_data("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
+
+    gSimCore.SetGame(GAME_PGM_TEST);
+}
+
+
 static void load_testbios()
 {
     g_fs.addSearchPath("../roms/pgm.zip");
@@ -77,7 +91,6 @@ bool game_init(game_t game)
 {
     g_fs.clearSearchPaths();
     g_fs.addSearchPath(".");
-    g_fs.addSearchPath("../roms");
 
     switch (game)
     {
@@ -86,6 +99,9 @@ bool game_init(game_t game)
         break;
     case GAME_TESTBIOS:
         load_testbios();
+        break;
+    case GAME_PGM_TEST:
+        load_pgm_test();
         break;
     case GAME_ESPGALBL:
         load_espgalbl();

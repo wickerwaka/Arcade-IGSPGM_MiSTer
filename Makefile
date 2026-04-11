@@ -54,21 +54,21 @@ sim:
 
 sim/run: sim/pgm
 
-sim/%_test:
-	$(MAKE) -j8 -C testroms TARGET=$*_test
-	$(MAKE) -j8 -C sim run GAME=$*_test
+sim/test:
+	$(MAKE) -j8 -C testroms TARGET=pgm_test
+	$(MAKE) -j8 -C sim run GAME=pgm_test
 
 sim/%:
 	$(MAKE) -j8 -C sim run GAME=$*
 
 
-debug: debug/finalb_test
+debug: debug/pgm
 
 debug/%:
 	$(MAKE) -j8 -C testroms debug TARGET=$*
 
 
-picorom: picorom/finalb_test
+picorom: picorom/pgm
 
 picorom/%:
 	$(MAKE) -j8 -C testroms picorom TARGET=$*
