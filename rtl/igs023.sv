@@ -439,13 +439,25 @@ always @(posedge clk) begin
         end
     end
 
-    ssbus.setup(SS_IDX, 16, 1);
+    ssbus.setup(SS_IDX, 16 + 32 + (256 * 8), 1);
     if (ssbus.access(SS_IDX)) begin
         if (ssbus.write) begin
-            ctrl[ssbus.addr[3:0]] <= ssbus.data[15:0];
+            if (ssbus.addr < 32) begin
+                zoom_table[ssbus.addr[4:0]] <= ssbus.data[15:0];
+            end else if (ssbus.addr < 48) begin
+                ctrl[ssbus.addr[3:0]] <= ssbus.data[15:0];
+            end else begin
+                sprite_data[ssbus.addr - 48] <= ssbus.data[15:0];
+            end
             ssbus.write_ack(SS_IDX);
         end else if (ssbus.read) begin
-            ssbus.read_response(SS_IDX, { 48'b0, ctrl[ssbus.addr[3:0]] });
+            if (ssbus.addr < 32) begin
+                ssbus.read_response(SS_IDX, { 48'b0, zoom_table[ssbus.addr[4:0]] });
+            end else if (ssbus.addr < 48) begin
+                ssbus.read_response(SS_IDX, { 48'b0, ctrl[ssbus.addr[3:0]] });
+            end else begin
+                ssbus.read_response(SS_IDX, { 48'b0, sprite_data[ssbus.addr - 48] });
+            end
         end
     end
 end

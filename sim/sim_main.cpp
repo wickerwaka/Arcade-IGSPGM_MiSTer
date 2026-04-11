@@ -132,8 +132,8 @@ int main(int argc, char **argv)
                     printf("Running %llu frames...\n", cmd.count);
                 for (uint64_t i = 0; i < cmd.count; i++)
                 {
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; });
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; });
+                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; }, 10000000);
+                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; }, 10000000);
                 }
                 if (command_queue.is_verbose())
                     printf("Completed running %llu frames\n", cmd.count);
@@ -317,8 +317,8 @@ int main(int argc, char **argv)
             {
                 if (gSimCore.mSimulationStepVblank)
                 {
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; });
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; });
+                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; }, 0);
+                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; }, 0);
                 }
                 else
                 {

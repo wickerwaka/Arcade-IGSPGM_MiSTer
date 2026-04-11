@@ -115,7 +115,7 @@ void ui_draw()
         // Save/Restore State Section
         ImGui::Text("Save/Restore State");
 
-        static char state_filename[256] = "state.f2state";
+        static char state_filename[256] = "state.pgmstate";
         ImGui::InputText("State Filename", state_filename, sizeof(state_filename));
 
         static std::vector<std::string> state_files;
@@ -124,7 +124,7 @@ void ui_draw()
         // Auto-generate filename when file list is loaded/updated
         if (refresh_state_files)
         {
-            state_files = state_manager->get_f2state_files();
+            state_files = state_manager->get_pgmstate_files();
             std::string auto_name = state_manager->generate_next_state_name();
             strncpy(state_filename, auto_name.c_str(), sizeof(state_filename) - 1);
             state_filename[sizeof(state_filename) - 1] = '\0';
@@ -133,11 +133,11 @@ void ui_draw()
 
         if (ImGui::Button("Save State"))
         {
-            // Ensure filename has .f2state extension
+            // Ensure filename has .pgmstate extension
             std::string filename = state_filename;
-            if (filename.size() < 8 || filename.substr(filename.size() - 8) != ".f2state")
+            if (filename.size() < 9 || filename.substr(filename.size() - 9) != ".pgmstate")
             {
-                filename += ".f2state";
+                filename += ".pgmstate";
                 strncpy(state_filename, filename.c_str(), sizeof(state_filename) - 1);
                 state_filename[sizeof(state_filename) - 1] = '\0';
             }
@@ -145,7 +145,7 @@ void ui_draw()
             if (state_manager->save_state(state_filename))
             {
                 // Update file list after successfully saving
-                state_files = state_manager->get_f2state_files();
+                state_files = state_manager->get_pgmstate_files();
                 // Try to select the newly saved file
                 for (size_t i = 0; i < state_files.size(); i++)
                 {
@@ -182,7 +182,7 @@ void ui_draw()
         }
         else
         {
-            ImGui::Text("No state files found (*.f2state)");
+            ImGui::Text("No state files found (*.pgmstate)");
         }
 
         ImGui::Separator();

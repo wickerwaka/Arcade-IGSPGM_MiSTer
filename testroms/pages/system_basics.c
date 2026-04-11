@@ -4,23 +4,27 @@
 
 #include "../util.h"
 #include "../tilemap.h"
+#include "../igs023.h"
+#include "../color.h"
 
 static uint16_t frame_count = 0;
 
 static void init()
 {
-    reset_screen();
+    igs023_init();
+    text_reset();
+    set_default_palette();
 
     frame_count = 0;
 }
 
 static void update()
 {
-    wait_vblank();
+    igs023_wait_vblank();
 
     text_color(1);
     text_cursor(3, 2);
-    textf("VBL: %05X  IRQ: %05X FRAME: %05X\n", vblank_count, irq4_count, frame_count);
+    textf("VBL: %05X  IRQ: %05X FRAME: %05X\n", igs023_get_vblank_count(), igs023_get_irq4_count(), frame_count);
 
 
     text_cursor(3, 13);

@@ -5,11 +5,11 @@
 
 static volatile s16 *IGS023_SPRITES = (volatile s16 *)0xb00000;
 static volatile s16 *IGS023_ZOOM = (volatile s16 *)0xb01000;
-static volatile s16 *IGS023_BG_Y = (volatile s16 *)0xb02000;
-static volatile s16 *IGS023_BG_X = (volatile s16 *)0xb03000;
+static s16 *IGS023_BG_Y = (s16 *)0xb02000;
+static s16 *IGS023_BG_X = (s16 *)0xb03000;
 static volatile s16 *IGS023_UNK1 = (volatile s16 *)0xb04000;
-static volatile s16 *IGS023_FG_Y = (volatile s16 *)0xb05000;
-static volatile s16 *IGS023_FG_X = (volatile s16 *)0xb06000;
+static s16 *IGS023_FG_Y = (s16 *)0xb05000;
+static s16 *IGS023_FG_X = (s16 *)0xb06000;
 static volatile s16 *IGS023_SCANLINE = (volatile s16 *)0xb07000;
 static volatile s16 *IGS023_UNK2 = (volatile s16 *)0xb08000;
 static volatile s16 *IGS023_UNK3 = (volatile s16 *)0xb09000;
@@ -40,11 +40,18 @@ static volatile s16 *IGS023_UNK8 = (volatile s16 *)0xb0f000;
 typedef struct
 {
     u16 code;
-    u16 unk2 : 8;
-    u16 flipy : 1;
-    u16 flipx : 1;
-    u16 color : 5;
-    u16 unk1 : 1;
+    union
+    {
+        struct
+        {
+            u16 unk2 : 8;
+            u16 flipy : 1;
+            u16 flipx : 1;
+            u16 color : 5;
+            u16 unk1 : 1;
+        };
+        u16 attrib;
+    };
 } IGS023Tile;
 
 typedef struct

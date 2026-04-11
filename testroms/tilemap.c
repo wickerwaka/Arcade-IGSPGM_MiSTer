@@ -4,10 +4,8 @@
 #include "memory_map.h"
 #include "printf/printf.h"
 #include "tilemap.h"
-#include "util.h"
-#include "input.h"
-#include "color.h"
 #include "memory_map.h"
+#include "util.h"
 
 uint16_t cur_x, cur_y;
 uint16_t cur_color;
@@ -23,6 +21,12 @@ void text_cursor(int x, int y)
 {
     cur_x = x;
     cur_y = y;
+}
+
+IGS023Tile *text_get_tile(int x, int y)
+{
+    uint16_t ofs = ( y * width() ) + x;
+    return &VRAM->fg[ofs];
 }
 
 u16 text_get_x() { return cur_x; }
@@ -108,20 +112,11 @@ void text_clear(int x, int y, int w, int h)
     }
 }
 
-void reset_screen_config()
+void text_reset()
 {
-    *IGS023_BG_X = 0;
-    *IGS023_BG_Y = 0;
+    memset(VRAM->fg, 0, sizeof(VRAM->fg));
+
     *IGS023_FG_X = 0;
     *IGS023_FG_Y = 0;
-}
-
-void reset_screen()
-{
-    memset(VRAM, 0, sizeof(IGS023VRAM));
-
-    reset_screen_config();
-
-    set_default_palette();
 }
 

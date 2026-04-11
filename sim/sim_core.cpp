@@ -107,12 +107,16 @@ void SimCore::Tick(int count)
     }
 }
 
-void SimCore::TickUntil(std::function<bool()> until)
+bool SimCore::TickUntil(std::function<bool()> until, int limit)
 {
+    int count = 0;
     while (!until())
     {
+        count++;
+        if (count == limit) return false;
         Tick(1);
     }
+    return true;
 }
 
 void SimCore::Shutdown()
@@ -241,7 +245,7 @@ bool SimCore::SendIOCTLDataDDR(uint8_t index, uint32_t addr, const std::vector<u
     mTop->ioctl_download = 0;
     Tick(2);
 
-    TickUntil([&] { return mTop->rootp->sim_top__DOT__rom_load_busy == 0; });
+    TickUntil([&] { return mTop->rootp->sim_top__DOT__rom_load_busy == 0; }, 0);
 
     mTop->reset = 0;
 

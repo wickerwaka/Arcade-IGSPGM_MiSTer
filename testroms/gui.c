@@ -157,10 +157,74 @@ bool gui_bits16(const char *label, uint16_t *value)
     return pressed;
 }
 
+bool gui_u16(const char *label, uint16_t *value)
+{
+    bool pressed = false;
+    u16 active_bit = 0;
+    with_label(label);
+    if (cur_id == active_id)
+    {
+        if (input_pressed(LEFT))
+        {
+            *value = *value - 1;
+            pressed = true;
+        }
+        if (input_pressed(RIGHT))
+        {
+            *value = *value + 1;
+            pressed = true;
+        }
+        text_color(ACTIVE_COLOR);
+    }
+    else
+    {
+        text_color(INACTIVE_COLOR);
+    }
+    
+    textf("%04X", *value);
+
+    end_element();
+    return pressed;
+}
+
+bool gui_u8(const char *label, u8 *value, u8 min, u8 max)
+{
+    bool pressed = false;
+    u16 active_bit = 0;
+    with_label(label);
+    if (cur_id == active_id)
+    {
+        if (input_pressed(LEFT))
+        {
+            if (*value > min)
+                *value = *value - 1;
+            pressed = true;
+        }
+        if (input_pressed(RIGHT))
+        {
+            if (*value < max)
+                *value = *value + 1;
+            pressed = true;
+        }
+        text_color(ACTIVE_COLOR);
+    }
+    else
+    {
+        text_color(INACTIVE_COLOR);
+    }
+    
+    textf("%02X", *value);
+
+    end_element();
+    return pressed;
+}
+
+
 
 
 void gui_end()
 {
+    text_color(0);
 }
 
 

@@ -4,7 +4,8 @@
 
 #include "../util.h"
 #include "../tilemap.h"
-
+#include "../igs023.h"
+#include "../color.h"
 #include "../gui.h"
 
 static uint16_t frame_count = 0;
@@ -12,9 +13,9 @@ static uint16_t zoom[2];
 
 static void init()
 {
-    reset_screen();
-    for( int i = 0; i < 64; i++ )
-        IGS023_ZOOM[i] = 0x1000;
+    igs023_init();
+    text_reset();
+    set_default_palette();
  
     frame_count = 0;
 }
@@ -25,7 +26,7 @@ static void update()
     for( int i = 0; i < 32; i++ )
         IGS023_ZOOM[i] = 0x5555;
 
-    wait_vblank();
+    u32 vblank_count = igs023_wait_vblank();
 
     for( int i = 0; i < 32; i++ )
         IGS023_ZOOM[i] = 0x5555;

@@ -7,39 +7,24 @@
 #include "system.h"
 #include "page.h"
 #include "memory_map.h"
+#include "igs023.h"
+
 #include "util.h"
 
 #include "color.h"
 
-volatile uint32_t vblank_count = 0;
-volatile uint32_t irq4_count = 0;
-
 __attribute__ ((section(".sprite_buffer"))) __attribute__((used))
 IGS023Sprite SPRITE_BUFFER[256];
 
-void wait_vblank()
-{
-    uint32_t current = vblank_count;
-    while( current == vblank_count )
-    {
-    }
-}
-
 void level6_handler()
 {
-    vblank_count++;
-
-    *IGS023_CTRL &= ~IGS023_CTRL_IRQ6_EN;
-    *IGS023_CTRL |= IGS023_CTRL_IRQ6_EN;
+    igs023_ack_irq6();
 }
 
 void level4_handler()
 {
-    irq4_count++;
-    *IGS023_CTRL &= ~IGS023_CTRL_IRQ4_EN;
-    *IGS023_CTRL |= IGS023_CTRL_IRQ4_EN;
+    igs023_ack_irq4();
 }
-
 
 void illegal_instruction_handler()
 {
@@ -53,11 +38,8 @@ void illegal_instruction_handler()
 
 int main(int argc, char *argv[])
 {
-    *IGS023_CTRL = IGS023_CTRL_IRQ6_EN | IGS023_CTRL_IRQ4_EN;
+    igs023_init();
 
-    *IGS023_CTRL |= IGS023_CTRL_UNK10;
-    reset_screen();
-    enable_interrupts();
     memset(SPRITE_BUFFER, 0, 256 * 10);
     
     input_init();
@@ -65,7 +47,6 @@ int main(int argc, char *argv[])
     input_update();
 
     page_set_next_active();
-
 
     while(1)
     {

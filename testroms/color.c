@@ -44,17 +44,28 @@ static u16 simple_spr[32] =
     0x7FFE, 0x3540, 0x5E04, 0x6EA7, 0x7FEA, 0x58E2, 0x7D89, 0x0000
 };
 
+static u16 logo_pal[32] =
+{
+    0x0C63, 0x0864, 0x0CA6, 0x10E9, 0x152B, 0x1D6D, 0x21D0, 0x2A33,
+    0x3AB6, 0x4719, 0x579C, 0x6BFF, 0x2081, 0x2CC1, 0x34E1, 0x4121,
+    0x4981, 0x55E1, 0x5E21, 0x6A81, 0x7301, 0x7F80, 0x7FED, 0x7FF2,
+    0x7FF6, 0x7FFF, 0x03BF, 0x03BF, 0x03BF, 0x03BF, 0x03BF, 0x0000
+};
+
 void set_default_palette()
 {
     memset(PALRAM, 0, sizeof(*PALRAM));
 
     gradient(0, 255, 0, 255, 0, 255, PALRAM->sprites, 32);
+    gradient(0, 255, 0, 255, 0, 255, PALRAM->bg, 32);
 
     memcpy(&PALRAM->sprites[32], simple_spr, 32 * 2);
+    memcpy(&PALRAM->bg[32], logo_pal, 32 * 2);
     
     set_text_palette(0, 255, 255, 255, 255, 255, 255);
     set_text_palette(1, 128, 128, 192, 192, 192, 255);
     set_text_palette(2, 192, 128, 128, 255, 192, 192);
     set_text_palette(3, 128, 192, 128, 192, 255, 192);
+    set_text_palette(4, 255,   0,   0, 255,   0,   0);
 }
 

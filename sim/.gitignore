@@ -4,7 +4,7 @@ roms/
 .cache/
 nanorom.mem
 microrom.mem
-*.f2state
+*.pgmstate
 *.ss
 compile_commands.json
 imgui.ini

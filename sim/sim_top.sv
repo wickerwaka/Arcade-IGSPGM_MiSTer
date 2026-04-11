@@ -79,7 +79,7 @@ wire [1:0] sdr_rom_be;
 reg [63:0] sdr_cpu_q;
 reg [31:0] sdr_scn0_q;
 reg [63:0] sdr_scn_mux_q;
-reg [15:0] sdr_audio_q;
+reg [63:0] sdr_audio_q;
 wire [15:0] sdr_rom_data;
 
 
@@ -258,7 +258,7 @@ always_ff @(posedge clk) begin
             end
             3: begin
                 sdr_audio_ack <= sdr_audio_req;
-                sdr_audio_q <= sdr_q[15:0];
+                sdr_audio_q <= sdr_q;
             end
             4: begin
                 sdr_rom_ack <= sdr_rom_req;

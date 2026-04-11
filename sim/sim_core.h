@@ -67,7 +67,7 @@ class SimCore
     // Main simulation methods
     void Init();
     void Tick(int count = 1);
-    void TickUntil(std::function<bool()> until);
+    bool TickUntil(std::function<bool()> until, int limit);
     void Shutdown();
 
     // Trace control methods

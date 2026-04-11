@@ -4,23 +4,26 @@
 
 #include "../util.h"
 #include "../tilemap.h"
+#include "../igs023.h"
 #include "../gui.h"
+#include "../color.h"
 
 bool toggle1 = false;
 uint16_t frame_count;
 static void init()
 {
     frame_count = 0;
-
-    reset_screen();
+    igs023_init();
+    text_reset();
+    set_default_palette();
 }
 
 static void update()
 {
-    wait_vblank();
+    igs023_wait_vblank();
     
     text_cursor(1, 1);
-    textf("VBL: %05X %05X\n", vblank_count, vblank_count - frame_count);
+    textf("VBL: %05X %05X\n", igs023_get_vblank_count());
 
     gui_begin(3, 3);
 

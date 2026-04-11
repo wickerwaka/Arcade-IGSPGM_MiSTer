@@ -35,7 +35,7 @@ class M68000Window : public Window
             gSimCore.TickUntil([curPC, endPC]{
                 uint32_t pc = gSimCore.mCPU->GetPC();
                 return (pc < curPC) || (pc >= endPC);
-            });
+            }, 1000);
         }
 
     }

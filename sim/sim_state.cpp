@@ -41,34 +41,34 @@ bool SimState::save_state(const char *filename)
 {
     m_top->ss_index = 0;
     m_top->ss_do_save = 1;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; });
+    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; }, 0);
 
     m_top->ss_do_save = 0;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; });
+    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; }, 0);
 
-    std::string full_path = get_state_path(filename);
-    m_memory->save_data(full_path.c_str(), m_offset, m_size);
+    std::string fullPath = get_state_path(filename);
+    m_memory->save_data(fullPath.c_str(), m_offset, m_size);
 
     return true;
 }
 
 bool SimState::restore_state(const char *filename)
 {
-    std::string full_path = get_state_path(filename);
-    m_memory->load_data(full_path.c_str(), m_offset,
+    std::string fullPath = get_state_path(filename);
+    m_memory->load_data(fullPath.c_str(), m_offset,
                         1); // Pass stride=1 explicitly
 
     m_top->ss_index = 0;
     m_top->ss_do_restore = 1;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; });
+    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; }, 0);
 
     m_top->ss_do_restore = 0;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; });
+    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; }, 0);
 
     return true;
 }
 
-std::vector<std::string> SimState::get_f2state_files()
+std::vector<std::string> SimState::get_pgmstate_files()
 {
     std::vector<std::string> files;
     DIR *dir;
@@ -81,8 +81,8 @@ std::vector<std::string> SimState::get_f2state_files()
         while ((ent = readdir(dir)) != NULL)
         {
             std::string filename = ent->d_name;
-            // Check if filename ends with .f2state
-            if (filename.size() > 8 && filename.substr(filename.size() - 8) == ".f2state")
+            // Check if filename ends with .pgmstate
+            if (filename.size() > 9 && filename.substr(filename.size() - 9) == ".pgmstate")
             {
                 files.push_back(filename);
             }
@@ -98,7 +98,7 @@ std::vector<std::string> SimState::get_f2state_files()
 
 std::string SimState::generate_next_state_name()
 {
-    std::vector<std::string> existing_files = get_f2state_files();
+    std::vector<std::string> existing_files = get_pgmstate_files();
 
     // Find the next available number
     int next_num = 0;
@@ -108,7 +108,7 @@ std::string SimState::generate_next_state_name()
     {
         // Generate filename with 3-digit zero-padded number
         std::stringstream ss;
-        ss << std::setfill('0') << std::setw(3) << next_num << ".f2state";
+        ss << std::setfill('0') << std::setw(3) << next_num << ".pgmstate";
         std::string candidate = ss.str();
 
         // Check if this filename already exists
@@ -132,5 +132,5 @@ std::string SimState::generate_next_state_name()
     }
 
     // Fallback if somehow we have 1000 save states
-    return "999.f2state";
+    return "999.pgmstate";
 }

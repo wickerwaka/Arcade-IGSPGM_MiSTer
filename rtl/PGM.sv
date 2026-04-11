@@ -180,7 +180,7 @@ logic ss_irq;
 logic ss_override;
 logic ss_cpu_execute;
 logic ss_reset;
-wire obj_paused = 0;
+wire ss_paused = ss_pause;
 
 assign ss_state_out = ss_state;
 
@@ -254,7 +254,7 @@ always_ff @(posedge clk) begin
         end
 
         SST_SAVE_WAIT_PAUSE: begin
-            if (obj_paused) begin
+            if (ss_paused) begin
                 ss_state <= SST_SAVE_WAIT_IRQ;
             end
         end
@@ -294,7 +294,7 @@ always_ff @(posedge clk) begin
         end
 
         SST_RESTORE_WAIT_PAUSE: begin
-            if (obj_paused) begin
+            if (ss_paused) begin
                 ss_read <= 1;
                 ss_state <= SST_RESTORE_WAIT_READ;
             end
@@ -366,7 +366,7 @@ wire irq4 = 0;
 jtframe_frac_cen #(2) cen_steady
 (
     .clk(clk),
-    .cen_in(~obj_paused | ss_cpu_execute),
+    .cen_in(~ss_paused | ss_cpu_execute),
     .n(10'd2),
     .m(10'd5),
     .cen({ce_dummy_10m, ce_20m}),
@@ -383,7 +383,7 @@ always_ff @(posedge clk) begin
     ce_cpu <= 0;
     ce_cpu_180 <= 0;
 
-    if (sdr_cpu_req == sdr_cpu_ack && (~obj_paused | ss_cpu_execute)) begin
+    if (sdr_cpu_req == sdr_cpu_ack && (~ss_paused | ss_cpu_execute)) begin
         if (ce_cpu_count[10:1] != ce_steady_count) begin
             ce_cpu <= ~ce_cpu_count[0];
             ce_cpu_180 <= ce_cpu_count[0];
@@ -395,7 +395,7 @@ end
 jtframe_frac_cen #(3) audio_cen
 (
     .clk(clk),
-    .cen_in(~obj_paused | ss_cpu_execute),
+    .cen_in(~ss_paused | ss_cpu_execute),
     .n(10'd464),
     .m(10'd685),
     .cen({ce_8m, ce_16m, ce_33m}),

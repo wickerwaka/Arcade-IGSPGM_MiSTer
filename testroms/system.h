@@ -10,9 +10,4 @@ typedef int16_t s16;
 typedef uint32_t u32;
 typedef int32_t s32;
 
-extern volatile uint32_t vblank_count;
-extern volatile uint32_t irq4_count;
-
-void wait_vblank();
-
 #endif
