@@ -1,0 +1,3 @@
+[submodule "hardware/PGMAudioExtractor/pico-sdk"]
+	path = hardware/PGMAudioExtractor/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git

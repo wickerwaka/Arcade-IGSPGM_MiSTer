@@ -316,7 +316,7 @@ always_comb begin
 end
 
 reg vblank_prev;
-reg hblank_prev;
+reg hsync_prev;
 
 wire irq6_en = ctrl[14][3];
 wire irq4_en = ctrl[14][2];
@@ -336,7 +336,7 @@ always @(posedge clk) begin
        
         // IRQ Generation
         vblank_prev <= vblank;
-        hblank_prev <= hblank;
+        hsync_prev <= hsync;
         if (vblank & ~vblank_prev & irq6_en) begin
             irq6 <= 1;
         end
@@ -351,7 +351,7 @@ always @(posedge clk) begin
 
         if (~vblank & vblank_prev) begin
             ctrl[7] <= 0;
-        end else if (hblank & ~hblank_prev) begin
+        end else if (hsync & ~hsync_prev) begin
             ctrl[7] <= ctrl[7] + 1;
 
             if (irq4_cnt == 61) begin
