@@ -34,20 +34,20 @@ struct IGS023Sprite
 };
 
 
-void get_obj_inst(uint16_t index, IGS023Sprite *inst)
+void GetObjInst(uint16_t index, IGS023Sprite *inst)
 {
-    uint8_t *inst_data = (uint8_t *)inst;
+    uint8_t *instData = (uint8_t *)inst;
 
     uint16_t offset = index * 5;
 
     for (int i = 0; i < 5; i++)
     {
-        inst_data[(i * 2) + 0] = G_PGM_SIGNAL(work_ram, ram_l).m_storage[offset + i];
-        inst_data[(i * 2) + 1] = G_PGM_SIGNAL(work_ram, ram_h).m_storage[offset + i];
+        instData[(i * 2) + 0] = G_PGM_SIGNAL(work_ram, ram_l).m_storage[offset + i];
+        instData[(i * 2) + 1] = G_PGM_SIGNAL(work_ram, ram_h).m_storage[offset + i];
     }
 }
 
-static void bullet(int x)
+static void Bullet(int x)
 {
     if (x != 0)
         ImGui::Bullet();
@@ -56,7 +56,7 @@ static void bullet(int x)
 class SpriteWindow : public Window
 {
   public:
-    bool m_hide_empty = false;
+    bool mHideEmpty = false;
 
     SpriteWindow() : Window("Sprite Instances")
     {
@@ -66,7 +66,7 @@ class SpriteWindow : public Window
 
     void Draw()
     {
-        ImGui::Checkbox("Hide Empty", &m_hide_empty);
+        ImGui::Checkbox("Hide Empty", &mHideEmpty);
 
         if (ImGui::BeginTable("obj", 8,
                               ImGuiTableFlags_HighlightHoveredColumn | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY |
@@ -86,32 +86,32 @@ class SpriteWindow : public Window
 
             IGS023Sprite insts[256];
 
-            std::vector<int> valid_insts;
-            valid_insts.reserve(256);
+            std::vector<int> validInsts;
+            validInsts.reserve(256);
 
             for (int i = 0; i < 256; i++)
             {
-                get_obj_inst(i, &insts[i]);
-                valid_insts.push_back(i);
+                GetObjInst(i, &insts[i]);
+                validInsts.push_back(i);
             }
 
             int hovered = ImGui::TableGetHoveredRow();
 
             ImGuiListClipper clipper;
-            clipper.Begin(valid_insts.size());
-            int row_count = 1;
-            int tooltip_idx = -1;
+            clipper.Begin(validInsts.size());
+            int rowCount = 1;
+            int tooltipIdx = -1;
             while (clipper.Step())
             {
                 for (uint16_t i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                 {
-                    int index = valid_insts[i];
+                    int index = validInsts[i];
 
-                    if (row_count == hovered)
+                    if (rowCount == hovered)
                     {
-                        tooltip_idx = index;
+                        tooltipIdx = index;
                     }
-                    row_count++;
+                    rowCount++;
 
                     IGS023Sprite &inst = insts[index];
                     ImGui::TableNextRow();
@@ -128,9 +128,9 @@ class SpriteWindow : public Window
                     ImGui::TableNextColumn();
                     ImGui::Text("%4d", inst.mHeight);
                     ImGui::TableNextColumn();
-                    bullet(inst.mXFlip);
+                    Bullet(inst.mXFlip);
                     ImGui::TableNextColumn();
-                    bullet(inst.mYFlip);
+                    Bullet(inst.mYFlip);
                 }
             }
 /*
@@ -154,7 +154,7 @@ class SpriteWindow : public Window
     }
 };
 
-SpriteWindow s_SpriteWindow;
+SpriteWindow gSpriteWindow;
 
 /*
 class TC0200OBJ_Preview_Window : public Window

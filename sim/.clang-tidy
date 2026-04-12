@@ -98,4 +98,4 @@ CheckOptions:
     value:           CamelCase
 
 # Ignore Verilator-generated code
-HeaderFilterRegex: '^(?!.*/verilated/).*$'
+HeaderFilterRegex: '^(?!.*/(verilated|imgui|third_party)/)(?!.*(stb_image_write|sim_hierarchy)\.h$).*$'

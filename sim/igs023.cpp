@@ -71,4 +71,4 @@ class IGS023ViewWindow : public Window
     }
 };
 
-IGS023ViewWindow s_IGS023ViewWindow;
+IGS023ViewWindow gIgs023ViewWindow;

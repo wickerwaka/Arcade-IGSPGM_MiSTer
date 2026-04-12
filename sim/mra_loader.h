@@ -20,19 +20,19 @@ class MRALoader
      * @param address Output DDR address to load the data at (0 if not used)
      * @return true if successful, false on error
      */
-    bool load(const std::string &mraPath, std::vector<uint8_t> &romData, uint32_t &address);
+    bool Load(const std::string &mraPath, std::vector<uint8_t> &romData, uint32_t &address);
 
     /**
      * Get the last error message
      * @return Error message from the last failed operation
      */
-    const std::string &getLastError() const
+    const std::string &GetLastError() const
     {
-        return m_lastError;
+        return mLastError;
     }
 
   private:
-    std::string m_lastError;
+    std::string mLastError;
 
     /**
      * Parse hex string into bytes
@@ -40,7 +40,7 @@ class MRALoader
      * @param output Vector to append bytes to
      * @return true if successful
      */
-    bool parseHexString(const std::string &hexStr, std::vector<uint8_t> &output);
+    bool ParseHexString(const std::string &hexStr, std::vector<uint8_t> &output);
 
     /**
      * Apply map attribute to data (e.g., "01" to take odd bytes)
@@ -48,14 +48,14 @@ class MRALoader
      * @param mapStr Map string
      * @return true if successful
      */
-    bool applyMap(std::vector<uint8_t> &data, const std::string &mapStr);
+    bool ApplyMap(std::vector<uint8_t> &data, const std::string &mapStr);
 
     /**
      * Calculate CRC32 of data
      * @param data Data to checksum
      * @return CRC32 value
      */
-    uint32_t calculateCRC32(const std::vector<uint8_t> &data);
+    uint32_t CalculateCRC32(const std::vector<uint8_t> &data);
 };
 
 #endif // MRA_LOADER_H

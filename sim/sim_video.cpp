@@ -7,64 +7,64 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-bool SimVideo::save_screenshot(const char *filename)
+bool SimVideo::SaveScreenshot(const char *filename)
 {
-    if (!pixels || !width || !height)
+    if (!mPixels || !mWidth || !mHeight)
         return false;
 
-    int actual_width = width;
-    int actual_height = height;
+    int actualWidth = mWidth;
+    int actualHeight = mHeight;
 
-    if (rotated)
+    if (mRotated)
     {
-        std::swap(actual_width, actual_height);
+        std::swap(actualWidth, actualHeight);
     }
 
-    uint8_t *rgb_data = new uint8_t[actual_width * actual_height * 3];
+    uint8_t *rgbData = new uint8_t[actualWidth * actualHeight * 3];
 
-    for (int y = 0; y < actual_height; y++)
+    for (int y = 0; y < actualHeight; y++)
     {
-        for (int x = 0; x < actual_width; x++)
+        for (int x = 0; x < actualWidth; x++)
         {
             uint32_t pixel;
 
-            if (rotated)
+            if (mRotated)
             {
-                int src_x = actual_height - 1 - y;
-                int src_y = x;
-                pixel = pixels[src_y * width + src_x];
+                int srcX = actualHeight - 1 - y;
+                int srcY = x;
+                pixel = mPixels[srcY * mWidth + srcX];
             }
             else
             {
-                pixel = pixels[y * width + x];
+                pixel = mPixels[y * mWidth + x];
             }
 
-            int dst_idx = (y * actual_width + x) * 3;
-            rgb_data[dst_idx + 0] = (pixel >> 24) & 0xFF;
-            rgb_data[dst_idx + 1] = (pixel >> 16) & 0xFF;
-            rgb_data[dst_idx + 2] = (pixel >> 8) & 0xFF;
+            int dstIdx = (y * actualWidth + x) * 3;
+            rgbData[dstIdx + 0] = (pixel >> 24) & 0xFF;
+            rgbData[dstIdx + 1] = (pixel >> 16) & 0xFF;
+            rgbData[dstIdx + 2] = (pixel >> 8) & 0xFF;
         }
     }
 
-    int result = stbi_write_png(filename, actual_width, actual_height, 3, rgb_data, actual_width * 3);
+    int result = stbi_write_png(filename, actualWidth, actualHeight, 3, rgbData, actualWidth * 3);
 
-    delete[] rgb_data;
+    delete[] rgbData;
 
     if (result)
     {
-        screenshot_status = "Screenshot saved";
-        screenshot_status_timer = 120;
+        mScreenshotStatus = "Screenshot saved";
+        mScreenshotStatusTimer = 120;
     }
     else
     {
-        screenshot_status = "Screenshot failed";
-        screenshot_status_timer = 120;
+        mScreenshotStatus = "Screenshot failed";
+        mScreenshotStatusTimer = 120;
     }
 
     return result != 0;
 }
 
-std::string SimVideo::generate_screenshot_filename(const char *game_name)
+std::string SimVideo::GenerateScreenshotFilename(const char *gameName)
 {
     mkdir("screenshots", 0755);
 
@@ -72,7 +72,7 @@ std::string SimVideo::generate_screenshot_filename(const char *game_name)
     struct tm *timeinfo = localtime(&now);
 
     std::stringstream filename;
-    filename << "screenshots/" << game_name << "_" << std::put_time(timeinfo, "%Y%m%d_%H%M%S") << ".png";
+    filename << "screenshots/" << gameName << "_" << std::put_time(timeinfo, "%Y%m%d_%H%M%S") << ".png";
 
     return filename.str();
 }

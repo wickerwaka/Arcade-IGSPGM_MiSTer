@@ -11,100 +11,100 @@
 #include <string.h>
 #include <cstdio>
 
-static const char *game_names[N_GAMES] = {
+static const char *gGameNames[N_GAMES] = {
     "pgm",
     "testbios",
     "pgm_test",
     "espgalbl",
 };
 
-game_t game_find(const char *name)
+Game GameFind(const char *name)
 {
     for (int i = 0; i < N_GAMES; i++)
     {
-        if (!strcasecmp(name, game_names[i]))
+        if (!strcasecmp(name, gGameNames[i]))
         {
-            return (game_t)i;
+            return (Game)i;
         }
     }
 
     return GAME_INVALID;
 }
 
-const char *game_name(game_t game)
+const char *GameName(Game game)
 {
     if (game == GAME_INVALID)
         return "INVALID";
-    return game_names[game];
+    return gGameNames[game];
 }
 
-static void load_pgm()
+static void LoadPgm()
 {
-    g_fs.addSearchPath("../roms/pgm.zip");
+    gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->load_data("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }
 
-static void load_pgm_test()
+static void LoadPgmTest()
 {
-    g_fs.addSearchPath("../testroms/build/pgm_test/pgm/");
-    g_fs.addSearchPath("../roms/pgm.zip");
+    gFileSearch.AddSearchPath("../testroms/build/pgm_test/pgm/");
+    gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->load_data("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM_TEST);
 }
 
 
-static void load_testbios()
+static void LoadTestbios()
 {
-    g_fs.addSearchPath("../roms/pgm.zip");
+    gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->load_data("testbios.bin", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("testbios.bin", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }
 
 
-static void load_espgalbl()
+static void LoadEspgalbl()
 {
-    g_fs.addSearchPath("../roms/pgm.zip");
-    g_fs.addSearchPath("../roms/espgalbl.zip");
-    g_fs.addSearchPath("../roms/espgal.zip");
+    gFileSearch.AddSearchPath("../roms/pgm.zip");
+    gFileSearch.AddSearchPath("../roms/espgalbl.zip");
+    gFileSearch.AddSearchPath("../roms/espgal.zip");
 
-    gSimCore.mSDRAM->load_data("espgaluda_u8.bin", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->load_data("cave_t04801w064.u19", TILE_ROM_SDR_BASE + 0x180000, 1);
+    gSimCore.mSDRAM->LoadData("espgaluda_u8.bin", CPU_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("cave_t04801w064.u19", TILE_ROM_SDR_BASE + 0x180000, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }
 
 
-bool game_init(game_t game)
+bool GameInit(Game game)
 {
-    g_fs.clearSearchPaths();
-    g_fs.addSearchPath(".");
+    gFileSearch.ClearSearchPaths();
+    gFileSearch.AddSearchPath(".");
 
     switch (game)
     {
     case GAME_PGM:
-        load_pgm();
+        LoadPgm();
         break;
     case GAME_TESTBIOS:
-        load_testbios();
+        LoadTestbios();
         break;
     case GAME_PGM_TEST:
-        load_pgm_test();
+        LoadPgmTest();
         break;
     case GAME_ESPGALBL:
-        load_espgalbl();
+        LoadEspgalbl();
         break;
     default:
         return false;
@@ -113,9 +113,9 @@ bool game_init(game_t game)
     return true;
 }
 
-bool game_init_mra(const char *mra_path)
+bool GameInitMra(const char *mraPath)
 {
-    g_fs.clearSearchPaths();
+    gFileSearch.ClearSearchPaths();
 
     // Add common ROM search paths
     std::vector<std::string> searchPaths = {".", "../roms/"};
@@ -123,15 +123,15 @@ bool game_init_mra(const char *mra_path)
     // Add ROM search paths
     for (const auto &path : searchPaths)
     {
-        g_fs.addSearchPath(path);
+        gFileSearch.AddSearchPath(path);
     }
 
     // Add the directory containing the MRA file as a search path
-    std::string mraPathStr(mra_path);
+    std::string mraPathStr(mraPath);
     size_t lastSlash = mraPathStr.find_last_of("/\\");
     if (lastSlash != std::string::npos)
     {
-        g_fs.addSearchPath(mraPathStr.substr(0, lastSlash));
+        gFileSearch.AddSearchPath(mraPathStr.substr(0, lastSlash));
     }
 
     // Load the MRA file
@@ -139,13 +139,13 @@ bool game_init_mra(const char *mra_path)
     std::vector<uint8_t> romData;
     uint32_t address = 0;
 
-    if (!loader.load(mra_path, romData, address))
+    if (!loader.Load(mraPath, romData, address))
     {
-        printf("Failed to load MRA file '%s': %s\n", mra_path, loader.getLastError().c_str());
+        printf("Failed to load MRA file '%s': %s\n", mraPath, loader.GetLastError().c_str());
         return false;
     }
 
-    printf("Loaded MRA: %s\n", mra_path);
+    printf("Loaded MRA: %s\n", mraPath);
     printf("ROM data size: %zu bytes\n", romData.size());
 
     if (address == 0)
@@ -165,6 +165,6 @@ bool game_init_mra(const char *mra_path)
         }
     }
 
-    printf("Successfully loaded MRA: %s\n", mra_path);
+    printf("Successfully loaded MRA: %s\n", mraPath);
     return true;
 }

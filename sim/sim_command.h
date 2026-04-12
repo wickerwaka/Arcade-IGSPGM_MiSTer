@@ -25,17 +25,17 @@ enum class CommandType
 
 struct Command
 {
-    CommandType type;
-    std::string filename;
-    uint64_t count;
+    CommandType mType;
+    std::string mFilename;
+    uint64_t mCount;
 
-    Command(CommandType t) : type(t), count(0)
+    Command(CommandType t) : mType(t), mCount(0)
     {
     }
-    Command(CommandType t, const std::string &f) : type(t), filename(f), count(0)
+    Command(CommandType t, const std::string &f) : mType(t), mFilename(f), mCount(0)
     {
     }
-    Command(CommandType t, uint64_t c) : type(t), count(c)
+    Command(CommandType t, uint64_t c) : mType(t), mCount(c)
     {
     }
 };
@@ -43,48 +43,48 @@ struct Command
 class CommandQueue
 {
   public:
-    void add(const Command &cmd);
-    bool empty() const
+    void Add(const Command &cmd);
+    bool Empty() const
     {
-        return commands.empty();
+        return mCommands.empty();
     }
-    Command &front()
+    Command &Front()
     {
-        return commands.front();
+        return mCommands.front();
     }
-    void pop()
+    void Pop()
     {
-        commands.pop();
+        mCommands.pop();
     }
-    size_t size() const
+    size_t Size() const
     {
-        return commands.size();
+        return mCommands.size();
     }
 
-    bool parse_arguments(int argc, char **argv, std::string &game_name);
-    bool parse_script_file(const std::string &filename);
+    bool ParseArguments(int argc, char **argv, std::string &gameName);
+    bool ParseScriptFile(const std::string &filename);
 
-    bool is_batch_mode() const
+    bool IsBatchMode() const
     {
-        return batch_mode;
+        return mBatchMode;
     }
-    bool is_headless() const
+    bool IsHeadless() const
     {
-        return headless;
+        return mHeadless;
     }
-    bool is_verbose() const
+    bool IsVerbose() const
     {
-        return verbose;
+        return mVerbose;
     }
 
   private:
-    std::queue<Command> commands;
-    bool batch_mode = false;
-    bool headless = false;
-    bool verbose = false;
+    std::queue<Command> mCommands;
+    bool mBatchMode = false;
+    bool mHeadless = false;
+    bool mVerbose = false;
 
-    bool parse_script_line(const std::string &line);
-    void print_usage(const char *program_name);
+    bool ParseScriptLine(const std::string &line);
+    void PrintUsage(const char *programName);
 };
 
 #endif

@@ -12,71 +12,71 @@
 #include <iomanip>
 
 SimState::SimState(PGM *top, SimDDR *memory, int offset, int size)
-    : m_top(top), m_memory(memory), m_offset(offset), m_size(size), m_game_name("unknown")
+    : mTop(top), mMemory(memory), mOffset(offset), mSize(size), mGameName("unknown")
 {
 }
 
-void SimState::set_game_name(const char *game_name)
+void SimState::SetGameName(const char *gameName)
 {
-    m_game_name = game_name;
-    ensure_state_directory();
+    mGameName = gameName;
+    EnsureStateDirectory();
 }
 
-void SimState::ensure_state_directory()
+void SimState::EnsureStateDirectory()
 {
     // Create states directory if it doesn't exist
     mkdir("states", 0755);
 
     // Create game-specific directory
-    std::string game_dir = "states/" + m_game_name;
-    mkdir(game_dir.c_str(), 0755);
+    std::string gameDir = "states/" + mGameName;
+    mkdir(gameDir.c_str(), 0755);
 }
 
-std::string SimState::get_state_path(const char *filename)
+std::string SimState::GetStatePath(const char *filename)
 {
-    return "states/" + m_game_name + "/" + filename;
+    return "states/" + mGameName + "/" + filename;
 }
 
-bool SimState::save_state(const char *filename)
+bool SimState::SaveState(const char *filename)
 {
-    m_top->ss_index = 0;
-    m_top->ss_do_save = 1;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; }, 0);
+    mTop->ss_index = 0;
+    mTop->ss_do_save = 1;
+    gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0);
 
-    m_top->ss_do_save = 0;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; }, 0);
+    mTop->ss_do_save = 0;
+    gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0);
 
-    std::string fullPath = get_state_path(filename);
-    m_memory->save_data(fullPath.c_str(), m_offset, m_size);
+    std::string fullPath = GetStatePath(filename);
+    mMemory->SaveData(fullPath.c_str(), mOffset, mSize);
 
     return true;
 }
 
-bool SimState::restore_state(const char *filename)
+bool SimState::RestoreState(const char *filename)
 {
-    std::string fullPath = get_state_path(filename);
-    m_memory->load_data(fullPath.c_str(), m_offset,
+    std::string fullPath = GetStatePath(filename);
+    mMemory->LoadData(fullPath.c_str(), mOffset,
                         1); // Pass stride=1 explicitly
 
-    m_top->ss_index = 0;
-    m_top->ss_do_restore = 1;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out != 0; }, 0);
+    mTop->ss_index = 0;
+    mTop->ss_do_restore = 1;
+    gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0);
 
-    m_top->ss_do_restore = 0;
-    gSimCore.TickUntil([&] { return m_top->ss_state_out == 0; }, 0);
+    mTop->ss_do_restore = 0;
+    gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0);
 
     return true;
 }
 
-std::vector<std::string> SimState::get_pgmstate_files()
+std::vector<std::string> SimState::GetPgmstateFiles()
 {
     std::vector<std::string> files;
     DIR *dir;
     struct dirent *ent;
 
-    std::string game_dir = "states/" + m_game_name;
+    std::string gameDir = "states/" + mGameName;
 
-    if ((dir = opendir(game_dir.c_str())) != NULL)
+    if ((dir = opendir(gameDir.c_str())) != NULL)
     {
         while ((ent = readdir(dir)) != NULL)
         {
@@ -96,24 +96,24 @@ std::vector<std::string> SimState::get_pgmstate_files()
     return files;
 }
 
-std::string SimState::generate_next_state_name()
+std::string SimState::GenerateNextStateName()
 {
-    std::vector<std::string> existing_files = get_pgmstate_files();
+    std::vector<std::string> existingFiles = GetPgmstateFiles();
 
     // Find the next available number
-    int next_num = 0;
+    int nextNum = 0;
     bool found = false;
 
-    while (!found && next_num < 1000)
+    while (!found && nextNum < 1000)
     {
         // Generate filename with 3-digit zero-padded number
         std::stringstream ss;
-        ss << std::setfill('0') << std::setw(3) << next_num << ".pgmstate";
+        ss << std::setfill('0') << std::setw(3) << nextNum << ".pgmstate";
         std::string candidate = ss.str();
 
         // Check if this filename already exists
         bool exists = false;
-        for (const auto &file : existing_files)
+        for (const auto &file : existingFiles)
         {
             if (file.find(candidate.substr(0, 3)) == 0)
             {
@@ -128,7 +128,7 @@ std::string SimState::generate_next_state_name()
             return candidate;
         }
 
-        next_num++;
+        nextNum++;
     }
 
     // Fallback if somehow we have 1000 save states

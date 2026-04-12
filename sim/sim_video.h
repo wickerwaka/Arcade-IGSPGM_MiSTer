@@ -16,107 +16,107 @@ class SimVideo : public Window
 
     ~SimVideo()
     {
-        deinit();
+        Deinit();
     }
 
     void Init()
     {
     }
 
-    void init(int w, int h, SDL_Renderer *renderer)
+    void Init(int w, int h, SDL_Renderer *renderer)
     {
-        width = w;
-        height = h;
-        pixels = new uint32_t[width * height];
+        mWidth = w;
+        mHeight = h;
+        mPixels = new uint32_t[mWidth * mHeight];
         if (renderer)
         {
-            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+            mTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, mWidth, mHeight);
         }
         else
         {
-            texture = nullptr; // Headless mode
+            mTexture = nullptr; // Headless mode
         }
-        x = 0;
-        y = 0;
-        rotated = false;
-        in_vsync = false;
-        in_hsync = false;
-        in_ce = false;
+        mX = 0;
+        mY = 0;
+        mRotated = false;
+        mInVsync = false;
+        mInHsync = false;
+        mInCe = false;
     }
 
-    void deinit()
+    void Deinit()
     {
-        if (pixels)
-            delete[] pixels;
-        if (texture)
-            SDL_DestroyTexture(texture);
+        if (mPixels)
+            delete[] mPixels;
+        if (mTexture)
+            SDL_DestroyTexture(mTexture);
 
-        pixels = nullptr;
-        texture = nullptr;
+        mPixels = nullptr;
+        mTexture = nullptr;
     }
 
-    void clock(bool ce, bool hsync, bool vsync, uint8_t r, uint8_t g, uint8_t b)
+    void Clock(bool ce, bool hsync, bool vsync, uint8_t r, uint8_t g, uint8_t b)
     {
         if (!ce)
         {
-            in_ce = false;
+            mInCe = false;
             return;
         }
 
-        if (in_ce)
+        if (mInCe)
             return;
 
         if (hsync)
         {
-            x = 0;
-            if (!in_hsync)
-                y++;
+            mX = 0;
+            if (!mInHsync)
+                mY++;
         }
 
         if (vsync)
         {
-            if (!in_vsync)
-                x = 0;
-            y = 0;
+            if (!mInVsync)
+                mX = 0;
+            mY = 0;
         }
 
-        in_hsync = hsync;
-        in_vsync = vsync;
-        in_ce = ce;
+        mInHsync = hsync;
+        mInVsync = vsync;
+        mInCe = ce;
 
         if (!hsync && !vsync)
         {
             uint32_t c = r << 24 | g << 16 | b << 8;
-            if (x < width && y < height)
-                pixels[(y * width) + x] = c;
-            x++;
+            if (mX < mWidth && mY < mHeight)
+                mPixels[(mY * mWidth) + mX] = c;
+            mX++;
         }
     }
 
-    void update_texture()
+    void UpdateTexture()
     {
-        if (!texture)
+        if (!mTexture)
             return; // Skip in headless mode
 
         SDL_Rect region;
 
-        int line_count = height;
-        int line_start = 0;
+        int lineCount = mHeight;
+        int lineStart = 0;
         region.x = 0;
-        region.y = line_start;
-        region.w = width;
-        region.h = line_count;
+        region.y = lineStart;
+        region.w = mWidth;
+        region.h = lineCount;
 
         void *work;
         int pitch;
 
-        SDL_LockTexture(texture, &region, &work, &pitch);
+        SDL_LockTexture(mTexture, &region, &work, &pitch);
 
-        for (int line = 0; line < line_count; line++)
+        for (int line = 0; line < lineCount; line++)
         {
             uint8_t *dest = ((uint8_t *)work) + (pitch * line);
-            uint32_t *src = pixels + ((line + line_start) * width);
-            if (!in_vsync && ((line + line_start) == y))
+            uint32_t *src = mPixels + ((line + lineStart) * mWidth);
+            if (!mInVsync && ((line + lineStart) == mY))
             {
                 memset(dest, 0x2f, pitch);
             }
@@ -126,29 +126,29 @@ class SimVideo : public Window
             }
         }
 
-        SDL_UnlockTexture(texture);
+        SDL_UnlockTexture(mTexture);
     }
 
-    bool save_screenshot(const char *filename);
-    std::string generate_screenshot_filename(const char *game_name);
+    bool SaveScreenshot(const char *filename);
+    std::string GenerateScreenshotFilename(const char *gameName);
 
     void Draw()
     {
-        ImGui::Checkbox("TATE", &rotated);
+        ImGui::Checkbox("TATE", &mRotated);
         ImGui::SameLine();
-        ImGui::Text("X: %03d Y: %03d", x, y);
+        ImGui::Text("X: %03d Y: %03d", mX, mY);
 
-        if (!screenshot_status.empty())
+        if (!mScreenshotStatus.empty())
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", screenshot_status.c_str());
-            if (--screenshot_status_timer <= 0)
-                screenshot_status.clear();
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "%s", mScreenshotStatus.c_str());
+            if (--mScreenshotStatusTimer <= 0)
+                mScreenshotStatus.clear();
         }
 
-        ImVec2 avail_size = ImGui::GetContentRegionAvail();
-        int w = avail_size.x;
-        int h = rotated ? ((w * 4) / 3) : ((w * 3) / 4);
+        ImVec2 availSize = ImGui::GetContentRegionAvail();
+        int w = availSize.x;
+        int h = mRotated ? ((w * 4) / 3) : ((w * 3) / 4);
 
         ImGuiWindow *window = ImGui::GetCurrentWindow();
         if (!window->SkipItems)
@@ -161,7 +161,7 @@ class SimVideo : public Window
                 // Render
                 ImVec2 uv0, uv1, uv2, uv3;
 
-                if (rotated)
+                if (mRotated)
                 {
                     uv0 = ImVec2(1, 0);
                     uv1 = ImVec2(1, 1);
@@ -176,23 +176,23 @@ class SimVideo : public Window
                     uv3 = ImVec2(0, 1);
                 }
 
-                window->DrawList->AddImageQuad((ImTextureID)texture, bb.GetTL(), bb.GetTR(), bb.GetBR(), bb.GetBL(), uv0, uv1, uv2, uv3,
+                window->DrawList->AddImageQuad((ImTextureID)mTexture, bb.GetTL(), bb.GetTR(), bb.GetBR(), bb.GetBL(), uv0, uv1, uv2, uv3,
                                                ImGui::GetColorU32(ImVec4(1, 1, 1, 1)));
             }
         }
     }
 
-    int width, height;
-    uint32_t *pixels = nullptr;
+    int mWidth, mHeight;
+    uint32_t *mPixels = nullptr;
 
-    bool rotated;
+    bool mRotated;
 
-    int x, y;
-    bool in_hsync, in_vsync, in_ce;
-    SDL_Texture *texture = nullptr;
+    int mX, mY;
+    bool mInHsync, mInVsync, mInCe;
+    SDL_Texture *mTexture = nullptr;
 
-    std::string screenshot_status;
-    int screenshot_status_timer = 0;
+    std::string mScreenshotStatus;
+    int mScreenshotStatusTimer = 0;
 };
 
 #endif

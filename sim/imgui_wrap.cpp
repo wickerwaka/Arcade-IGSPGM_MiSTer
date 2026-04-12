@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <SDL.h>
 
-SDL_Window *sdl_window;
-SDL_Renderer *sdl_renderer;
+SDL_Window *gSdlWindow;
+SDL_Renderer *gSdlRenderer;
 
 #define BTN_RIGHT 0x0001
 #define BTN_LEFT 0x0002
@@ -15,9 +15,9 @@ SDL_Renderer *sdl_renderer;
 #define BTN_BTN1 0x0010
 #define BTN_START 0x00010000
 
-static uint32_t buttons;
+static uint32_t gButtons;
 
-bool imgui_init(const char *title)
+bool ImguiInit(const char *title)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
@@ -26,8 +26,8 @@ bool imgui_init(const char *title)
     }
 
     // Create window with SDL_Renderer graphics context
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Window *window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+    SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_Window *window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, windowFlags);
     if (window == nullptr)
     {
         printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
@@ -58,22 +58,22 @@ bool imgui_init(const char *title)
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
 
-    sdl_window = window;
-    sdl_renderer = renderer;
+    gSdlWindow = window;
+    gSdlRenderer = renderer;
 
     Window::SortWindows();
 
-    ImGuiSettingsHandler ini_handler;
-    ini_handler.TypeName = "SimWindow";
-    ini_handler.TypeHash = ImHashStr("SimWindow");
-    ini_handler.ClearAllFn = nullptr;
-    ini_handler.ReadOpenFn = Window::SettingsHandler_ReadOpen;
-    ini_handler.ReadLineFn = Window::SettingsHandler_ReadLine;
-    ini_handler.ApplyAllFn = nullptr;
-    ini_handler.WriteAllFn = Window::SettingsHandler_WriteAll;
-    ImGui::AddSettingsHandler(&ini_handler);
+    ImGuiSettingsHandler iniHandler;
+    iniHandler.TypeName = "SimWindow";
+    iniHandler.TypeHash = ImHashStr("SimWindow");
+    iniHandler.ClearAllFn = nullptr;
+    iniHandler.ReadOpenFn = Window::SettingsHandlerReadOpen;
+    iniHandler.ReadLineFn = Window::SettingsHandlerReadLine;
+    iniHandler.ApplyAllFn = nullptr;
+    iniHandler.WriteAllFn = Window::SettingsHandlerWriteAll;
+    ImGui::AddSettingsHandler(&iniHandler);
 
-    for (Window *window : Window::s_windows)
+    for (Window *window : Window::gWindows)
     {
         window->Init();
     }
@@ -81,18 +81,18 @@ bool imgui_init(const char *title)
     return true;
 }
 
-bool imgui_begin_frame()
+bool ImguiBeginFrame()
 {
-    static uint64_t prev_ticks = 0;
+    static uint64_t sPrevTicks = 0;
 
     uint64_t ticks = SDL_GetTicks64();
-    uint64_t delta = ticks - prev_ticks;
+    uint64_t delta = ticks - sPrevTicks;
     if (delta < 16)
     {
         SDL_Delay((int)(16 - delta));
     }
 
-    prev_ticks = SDL_GetTicks64();
+    sPrevTicks = SDL_GetTicks64();
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -101,7 +101,7 @@ bool imgui_begin_frame()
         if (event.type == SDL_QUIT)
             return false;
         if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE &&
-            event.window.windowID == SDL_GetWindowID(sdl_window))
+            event.window.windowID == SDL_GetWindowID(gSdlWindow))
             return false;
 
         if (!ImGui::GetIO().WantCaptureKeyboard)
@@ -132,9 +132,9 @@ bool imgui_begin_frame()
                 }
 
                 if (event.type == SDL_KEYDOWN)
-                    buttons |= bits;
+                    gButtons |= bits;
                 else
-                    buttons &= ~bits;
+                    gButtons &= ~bits;
             }
         }
     }
@@ -147,9 +147,9 @@ bool imgui_begin_frame()
     {
         if (ImGui::BeginMenu("Windows"))
         {
-            for (Window *window : Window::s_windows)
+            for (Window *window : Window::gWindows)
             {
-                ImGui::MenuItem(window->m_title.c_str(), nullptr, &window->m_enabled);
+                ImGui::MenuItem(window->mTitle.c_str(), nullptr, &window->mEnabled);
             }
             ImGui::EndMenu();
         }
@@ -162,7 +162,7 @@ bool imgui_begin_frame()
         ImGui::EndMainMenuBar();
     }
 
-    for (Window *window : Window::s_windows)
+    for (Window *window : Window::gWindows)
     {
         window->Update();
     }
@@ -170,46 +170,46 @@ bool imgui_begin_frame()
     return true;
 }
 
-uint32_t imgui_get_buttons()
+uint32_t ImguiGetButtons()
 {
-    return buttons;
+    return gButtons;
 }
 
-void imgui_end_frame()
+void ImguiEndFrame()
 {
     ImGui::Render();
 
     ImGuiIO &io = ImGui::GetIO();
-    SDL_RenderSetScale(sdl_renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-    SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0, 0);
-    SDL_RenderClear(sdl_renderer);
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), sdl_renderer);
-    SDL_RenderPresent(sdl_renderer);
+    SDL_RenderSetScale(gSdlRenderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+    SDL_SetRenderDrawColor(gSdlRenderer, 0, 0, 0, 0);
+    SDL_RenderClear(gSdlRenderer);
+    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), gSdlRenderer);
+    SDL_RenderPresent(gSdlRenderer);
 }
 
-SDL_Renderer *imgui_get_renderer()
+SDL_Renderer *ImguiGetRenderer()
 {
-    return sdl_renderer;
+    return gSdlRenderer;
 }
 
-void imgui_set_title(const char *title)
+void ImguiSetTitle(const char *title)
 {
-    SDL_SetWindowTitle(sdl_window, title);
+    SDL_SetWindowTitle(gSdlWindow, title);
 }
 
-std::vector<Window *> Window::s_windows;
-Window *Window::s_head = nullptr;
+std::vector<Window *> Window::gWindows;
+Window *Window::gHead = nullptr;
 
 Window::Window(const char *name, ImGuiWindowFlags flags)
 {
-    m_title = name;
-    m_enabled = true;
-    m_flags = flags;
+    mTitle = name;
+    mEnabled = true;
+    mFlags = flags;
 
-    m_next = s_head;
-    s_head = this;
+    mNext = gHead;
+    gHead = this;
 
-    if (s_windows.size() > 0)
+    if (gWindows.size() > 0)
     {
         SortWindows();
     }
@@ -222,9 +222,9 @@ Window::~Window()
 
 void Window::Update()
 {
-    if (m_enabled)
+    if (mEnabled)
     {
-        if (ImGui::Begin(m_title.c_str(), &m_enabled, m_flags))
+        if (ImGui::Begin(mTitle.c_str(), &mEnabled, mFlags))
         {
             Draw();
         }
@@ -234,24 +234,24 @@ void Window::Update()
 
 void Window::SortWindows()
 {
-    s_windows.clear();
-    Window *window = s_head;
+    gWindows.clear();
+    Window *window = gHead;
     while (window)
     {
-        s_windows.push_back(window);
-        window = window->m_next;
+        gWindows.push_back(window);
+        window = window->mNext;
     }
 
-    std::sort(s_windows.begin(), s_windows.end(), [](auto a, auto b) { return a->m_title < b->m_title; });
+    std::sort(gWindows.begin(), gWindows.end(), [](auto a, auto b) { return a->mTitle < b->mTitle; });
 }
 
-void *Window::SettingsHandler_ReadOpen(ImGuiContext *, ImGuiSettingsHandler *, const char *name)
+void *Window::SettingsHandlerReadOpen(ImGuiContext *, ImGuiSettingsHandler *, const char *name)
 {
     ImGuiID id = ImHashStr(name);
 
-    for (Window *window : s_windows)
+    for (Window *window : gWindows)
     {
-        if (window->m_title == name)
+        if (window->mTitle == name)
         {
             return window;
         }
@@ -260,22 +260,22 @@ void *Window::SettingsHandler_ReadOpen(ImGuiContext *, ImGuiSettingsHandler *, c
     return nullptr;
 }
 
-void Window::SettingsHandler_ReadLine(ImGuiContext *, ImGuiSettingsHandler *, void *entry, const char *line)
+void Window::SettingsHandlerReadLine(ImGuiContext *, ImGuiSettingsHandler *, void *entry, const char *line)
 {
     Window *window = (Window *)entry;
     int en;
     if (sscanf(line, "IsEnabled=%d", &en) == 1)
     {
-        window->m_enabled = en != 0;
+        window->mEnabled = en != 0;
     }
 }
 
-void Window::SettingsHandler_WriteAll(ImGuiContext *, ImGuiSettingsHandler *handler, ImGuiTextBuffer *buf)
+void Window::SettingsHandlerWriteAll(ImGuiContext *, ImGuiSettingsHandler *handler, ImGuiTextBuffer *buf)
 {
     // Write to text buffer
-    for (Window *window : s_windows)
+    for (Window *window : gWindows)
     {
-        buf->appendf("[%s][%s]\n", handler->TypeName, window->m_title.c_str());
-        buf->appendf("IsEnabled=%d\n\n", window->m_enabled ? 1 : 0);
+        buf->appendf("[%s][%s]\n", handler->TypeName, window->mTitle.c_str());
+        buf->appendf("IsEnabled=%d\n\n", window->mEnabled ? 1 : 0);
     }
 }

@@ -18,8 +18,8 @@ class FileSearch
     // Enum to track search path type
     enum class PathType
     {
-        Directory,
-        ZipFile
+        DIRECTORY,
+        ZIP_FILE
     };
 
     // Structure to track search paths in order
@@ -40,7 +40,7 @@ class FileSearch
      * @param path Path to a directory or zip file
      * @return true if path exists and was added
      */
-    bool addSearchPath(const std::string &path);
+    bool AddSearchPath(const std::string &path);
 
     /**
      * Load a file into the provided buffer
@@ -68,25 +68,25 @@ class FileSearch
     /**
      * Clear all search paths
      */
-    void clearSearchPaths();
+    void ClearSearchPaths();
 
     /**
      * Save current search paths state
      * @return Saved state that can be restored later
      */
-    std::vector<SearchPath> saveSearchPaths() const;
+    std::vector<SearchPath> SaveSearchPaths() const;
 
     /**
      * Restore search paths from saved state
      * @param savedPaths Previously saved search paths
      */
-    void restoreSearchPaths(const std::vector<SearchPath> &savedPaths);
+    void RestoreSearchPaths(const std::vector<SearchPath> &savedPaths);
 
     /**
      * Get the number of search paths
      * @return Number of active search paths
      */
-    size_t getSearchPathCount() const
+    size_t GetSearchPathCount() const
     {
         return mSearchPaths.size();
     }
@@ -129,6 +129,6 @@ class FileSearch
 };
 
 // Global FileSearch instance that can be used throughout the application
-extern FileSearch g_fs;
+extern FileSearch gFileSearch;
 
 #endif // FILE_SEARCH_H

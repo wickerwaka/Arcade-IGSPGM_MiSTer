@@ -23,7 +23,14 @@ fi
 # Default to checking all .cpp files if no arguments
 if [ $# -eq 0 ]; then
     echo "Checking all C++ source files..."
-    find . -name "*.cpp" -not -path "*/verilated/*" -not -path "*/obj/*" -print0 | while IFS= read -r -d '' file; do
+    find . -name "*.cpp" \
+        -not -path "*/verilated/*" \
+        -not -path "*/obj/*" \
+        -not -path "*/imgui/*" \
+        -not -path "*/third_party/*" \
+        -not -name "sim_hierarchy.h" \
+        -not -name "stb_image_write.h" \
+        -print0 | while IFS= read -r -d '' file; do
         echo ""
         echo "=== Checking $file ==="
         "$CLANG_TIDY" -p . "$file" 2>&1 | grep -A 5 "warning:"

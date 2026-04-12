@@ -13,33 +13,33 @@ class SimState
     SimState(PGM *top, SimDDR *memory, int offset, int size);
 
     // Set the current game name for directory organization
-    void set_game_name(const char *game_name);
+    void SetGameName(const char *gameName);
 
     // Save state to the specified file
-    bool save_state(const char *filename);
+    bool SaveState(const char *filename);
 
     // Restore state from the specified file
-    bool restore_state(const char *filename);
+    bool RestoreState(const char *filename);
 
     // Get list of all available state files in game-specific directory
-    std::vector<std::string> get_pgmstate_files();
+    std::vector<std::string> GetPgmstateFiles();
 
     // Get the full path for a state file
-    std::string get_state_path(const char *filename);
+    std::string GetStatePath(const char *filename);
 
     // Create state directory if it doesn't exist
-    void ensure_state_directory();
+    void EnsureStateDirectory();
 
     // Generate next available state filename (000.pgmstate, 001.pgmstate, etc.)
-    std::string generate_next_state_name();
+    std::string GenerateNextStateName();
 
     // Tick the simulation for the given number of cycles
-    void tick(int count);
+    void Tick(int count);
 
   private:
-    PGM *m_top;
-    SimDDR *m_memory;
-    int m_offset;
-    int m_size;
-    std::string m_game_name;
+    PGM *mTop;
+    SimDDR *mMemory;
+    int mOffset;
+    int mSize;
+    std::string mGameName;
 };

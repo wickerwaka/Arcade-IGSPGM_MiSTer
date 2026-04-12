@@ -4,13 +4,13 @@
 
 class CommandQueue;
 
-void ui_init(const char *title);
-void ui_set_command_queue(CommandQueue *queue);
+void UiInit(const char *title);
+void UiSetCommandQueue(CommandQueue *queue);
 
-void ui_game_changed();
+void UiGameChanged();
 
-bool ui_begin_frame();
-void ui_end_frame();
-void ui_draw();
+bool UiBeginFrame();
+void UiEndFrame();
+void UiDraw();
 
 #endif // SIM_UI_H

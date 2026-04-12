@@ -12,45 +12,45 @@
 class SimDDR : public MemoryInterface
 {
   public:
-    SimDDR(uint32_t base, uint32_t size_bytes)
+    SimDDR(uint32_t base, uint32_t sizeBytes)
     {
         // Initialize memory with size rounded up to multiple of 8 bytes
-        size = (size_bytes + 7) & ~7; // Round up to multiple of 8
-        memory.resize(size, 0);
-        base_addr = base;
+        mSize = (sizeBytes + 7) & ~7; // Round up to multiple of 8
+        mMemory.resize(mSize, 0);
+        mBaseAddr = base;
 
         // Reset state
-        read_complete = false;
-        busy = false;
-        busy_counter = 0;
-        burst_counter = 0;
-        burst_size = 0;
+        mReadComplete = false;
+        mBusy = false;
+        mBusyCounter = 0;
+        mBurstCounter = 0;
+        mBurstSize = 0;
     }
 
-    bool load_data(const std::vector<uint8_t> &data, uint32_t offset = 0, uint32_t stride = 1)
+    bool LoadData(const std::vector<uint8_t> &data, uint32_t offset = 0, uint32_t stride = 1)
     {
-        uint32_t mem_offset = offset - base_addr;
+        uint32_t memOffset = offset - mBaseAddr;
 
         // Check if the file will fit in memory with the stride
-        if (mem_offset + (data.size() - 1) * stride + 1 > size)
+        if (memOffset + (data.size() - 1) * stride + 1 > mSize)
         {
             printf("Data too large (%u) to fit in memory at specified offset 0x%08x (0x%08x) with "
                    "stride %u\n",
-                   (uint32_t)data.size(), offset, mem_offset, stride);
+                   (uint32_t)data.size(), offset, memOffset, stride);
             return false;
         }
 
         if (stride == 1)
         {
             // Fast path for stride=1 (contiguous data)
-            std::copy(data.begin(), data.end(), memory.begin() + mem_offset);
+            std::copy(data.begin(), data.end(), mMemory.begin() + memOffset);
         }
         else
         {
             // Copy to memory with stride
             for (size_t i = 0; i < data.size(); i++)
             {
-                memory[mem_offset + i * stride] = data[i];
+                mMemory[memOffset + i * stride] = data[i];
             }
         }
         return true;
@@ -58,16 +58,16 @@ class SimDDR : public MemoryInterface
 
     // Load data from a file into memory at specified offset with optional
     // stride
-    bool load_data(const std::string &filename, uint32_t offset = 0, uint32_t stride = 1)
+    bool LoadData(const std::string &filename, uint32_t offset = 0, uint32_t stride = 1)
     {
         std::vector<uint8_t> buffer;
-        if (!g_fs.LoadFile(filename, buffer))
+        if (!gFileSearch.LoadFile(filename, buffer))
         {
             printf("Failed to find file: %s\n", filename.c_str());
             return false;
         }
 
-        if (load_data(buffer, offset, stride))
+        if (LoadData(buffer, offset, stride))
         {
             printf("Loaded %zu bytes from %s at offset 0x%08X with stride %u\n", buffer.size(), filename.c_str(), offset, stride);
             return true;
@@ -76,14 +76,14 @@ class SimDDR : public MemoryInterface
     }
 
     // Save memory data to a file
-    bool save_data(const std::string &filename, uint32_t offset = 0, size_t length = 0)
+    bool SaveData(const std::string &filename, uint32_t offset = 0, size_t length = 0)
     {
-        uint32_t mem_offset = offset - base_addr;
+        uint32_t memOffset = offset - mBaseAddr;
 
         if (length == 0)
-            length = size - mem_offset;
+            length = mSize - memOffset;
 
-        if (mem_offset + length > size)
+        if (memOffset + length > mSize)
         {
             printf("Invalid offset/length for memory save\n");
             return false;
@@ -96,125 +96,125 @@ class SimDDR : public MemoryInterface
             return false;
         }
 
-        size_t bytes_written = fwrite(&memory[mem_offset], 1, length, fp);
+        size_t bytesWritten = fwrite(&mMemory[memOffset], 1, length, fp);
         fclose(fp);
 
-        if (bytes_written != length)
+        if (bytesWritten != length)
         {
             printf("Failed to write entire data to file: %s\n", filename.c_str());
             return false;
         }
 
-        printf("Saved %zu bytes to %s from offset 0x%08X\n", bytes_written, filename.c_str(), offset);
+        printf("Saved %zu bytes to %s from offset 0x%08X\n", bytesWritten, filename.c_str(), offset);
         return true;
     }
 
     // Clock the memory, processing read/write operations
-    void clock(uint32_t addr, const uint64_t &wdata, uint64_t &rdata, bool read, bool write, uint8_t &busy_out, uint8_t &read_complete_out,
+    void Clock(uint32_t addr, const uint64_t &wdata, uint64_t &rdata, bool read, bool write, uint8_t &busyOut, uint8_t &readCompleteOut,
                uint8_t burstcnt = 1, uint8_t byteenable = 0xFF)
     {
         // Update busy status - simulate memory with occasional busy cycles
-        if (busy)
+        if (mBusy)
         {
-            busy_counter--;
-            if (busy_counter == 0)
+            mBusyCounter--;
+            if (mBusyCounter == 0)
             {
                 // If we're completing a read operation
-                if (pending_read)
+                if (mPendingRead)
                 {
-                    read_complete = true;
+                    mReadComplete = true;
 
                     // Prepare read data from the current burst address
-                    uint32_t current_burst_addr = (pending_addr & ~0x7) + (burst_size - burst_counter) * 8;
-                    current_burst_addr -= base_addr;
-                    if (current_burst_addr + 8 <= size)
+                    uint32_t currentBurstAddr = (mPendingAddr & ~0x7) + (mBurstSize - mBurstCounter) * 8;
+                    currentBurstAddr -= mBaseAddr;
+                    if (currentBurstAddr + 8 <= mSize)
                     {
                         // Assemble 64-bit word from memory
-                        pending_rdata = 0;
+                        mPendingRdata = 0;
                         for (int i = 0; i < 8; i++)
                         {
-                            pending_rdata |= static_cast<uint64_t>(memory[current_burst_addr + i]) << (i * 8);
+                            mPendingRdata |= static_cast<uint64_t>(mMemory[currentBurstAddr + i]) << (i * 8);
                         }
                     }
                     else
                     {
-                        pending_rdata = 0;
+                        mPendingRdata = 0;
                     }
 
                     // Decrement burst counter
-                    burst_counter--;
+                    mBurstCounter--;
 
                     // If burst is complete, clear pending read flag
-                    if (burst_counter == 0)
+                    if (mBurstCounter == 0)
                     {
-                        pending_read = false;
-                        busy = false;
+                        mPendingRead = false;
+                        mBusy = false;
                     }
                     else
                     {
                         // Otherwise, set up for next word in burst
-                        busy_counter = read_latency;
+                        mBusyCounter = mReadLatency;
                     }
                 }
-                else if (burst_counter > 0)
+                else if (mBurstCounter > 0)
                 {
                     // Writing in burst mode, move to next word
-                    burst_counter--;
+                    mBurstCounter--;
 
-                    if (burst_counter == 0)
+                    if (mBurstCounter == 0)
                     {
-                        busy = false;
+                        mBusy = false;
                     }
                     else
                     {
                         // Ready for next write in the burst
-                        busy = false;
-                        busy_counter = 0;
+                        mBusy = false;
+                        mBusyCounter = 0;
                     }
                 }
                 else
                 {
                     // Normal operation completion
-                    busy = false;
+                    mBusy = false;
                 }
             }
         }
         else
         {
-            if (read && !pending_read)
+            if (read && !mPendingRead)
             {
                 // Start new read operation in burst mode
-                busy = true;
-                busy_counter = read_latency;
-                pending_read = true;
-                pending_addr = addr;
-                read_complete = false;
-                burst_counter = burstcnt;
-                burst_size = burstcnt;
+                mBusy = true;
+                mBusyCounter = mReadLatency;
+                mPendingRead = true;
+                mPendingAddr = addr;
+                mReadComplete = false;
+                mBurstCounter = burstcnt;
+                mBurstSize = burstcnt;
             }
-            else if (write && (burst_counter == 0 || !busy))
+            else if (write && (mBurstCounter == 0 || !mBusy))
             {
                 // Handle start of burst write or individual word in burst
-                uint32_t current_burst_addr;
+                uint32_t currentBurstAddr;
 
-                if (burst_counter == 0)
+                if (mBurstCounter == 0)
                 {
                     // Starting a new burst write
-                    pending_addr = addr;
-                    burst_counter = burstcnt - 1; // First word is written now
-                    burst_size = burstcnt;
-                    current_burst_addr = (addr & ~0x7) - base_addr;
+                    mPendingAddr = addr;
+                    mBurstCounter = burstcnt - 1; // First word is written now
+                    mBurstSize = burstcnt;
+                    currentBurstAddr = (addr & ~0x7) - mBaseAddr;
                 }
                 else
                 {
                     // Writing next word in an existing burst
-                    current_burst_addr = (pending_addr & ~0x7) + (burst_size - burst_counter) * 8;
-                    current_burst_addr -= base_addr;
-                    burst_counter--;
+                    currentBurstAddr = (mPendingAddr & ~0x7) + (mBurstSize - mBurstCounter) * 8;
+                    currentBurstAddr -= mBaseAddr;
+                    mBurstCounter--;
                 }
 
                 // Perform write operation
-                if (current_burst_addr + 8 <= size)
+                if (currentBurstAddr + 8 <= mSize)
                 {
                     // Write 64-bit word to memory, respecting byte enable
                     // signal
@@ -224,14 +224,14 @@ class SimDDR : public MemoryInterface
                         // set
                         if (byteenable & (1 << i))
                         {
-                            memory[current_burst_addr + i] = (wdata >> (i * 8)) & 0xFF;
+                            mMemory[currentBurstAddr + i] = (wdata >> (i * 8)) & 0xFF;
                         }
                     }
                 }
 
                 // If this is the last word in the burst or not a burst
                 // operation
-                if (burst_counter == 0)
+                if (mBurstCounter == 0)
                 {
                     // Simulate write latency
                     // TODO - busy usage doesn't match DE-10
@@ -242,61 +242,61 @@ class SimDDR : public MemoryInterface
         }
 
         // Set outputs
-        busy_out = 0; // busy ? 1 : 0; // TODO - busy_out doesn't match DE-10 DDR
-        read_complete_out = read_complete ? 1 : 0;
+        busyOut = 0; // busy ? 1 : 0; // TODO - busy_out doesn't match DE-10 DDR
+        readCompleteOut = mReadComplete ? 1 : 0;
 
-        if (read_complete)
+        if (mReadComplete)
         {
-            rdata = pending_rdata;
-            read_complete = false; // Clear completion flag after it's been seen
+            rdata = mPendingRdata;
+            mReadComplete = false; // Clear completion flag after it's been seen
         }
     }
 
     // Direct access to memory for debugging/testing
     uint8_t &operator[](size_t addr)
     {
-        static uint8_t dummy = 0;
-        if (addr < base_addr)
-            return dummy;
-        size_t offset = addr - base_addr;
-        if (offset >= size)
-            return dummy;
-        return memory[offset];
+        static uint8_t sDummy = 0;
+        if (addr < mBaseAddr)
+            return sDummy;
+        size_t offset = addr - mBaseAddr;
+        if (offset >= mSize)
+            return sDummy;
+        return mMemory[offset];
     }
 
     // Memory parameters
-    void set_read_latency(int cycles)
+    void SetReadLatency(int cycles)
     {
-        read_latency = cycles;
+        mReadLatency = cycles;
     }
-    void set_write_latency(int cycles)
+    void SetWriteLatency(int cycles)
     {
-        write_latency = cycles;
+        mWriteLatency = cycles;
     }
 
     // ------------------------------------------------------------------
     // MemoryInterface
     virtual void Read(uint32_t address, uint32_t sz, void *data) const
     {
-        if (address < base_addr)
+        if (address < mBaseAddr)
             return;
-        address = address - base_addr;
-        sz = ClampSize(size, address, sz);
-        memcpy(data, memory.data() + address, sz);
+        address = address - mBaseAddr;
+        sz = ClampSize(mSize, address, sz);
+        memcpy(data, mMemory.data() + address, sz);
     }
 
     virtual void Write(uint32_t address, uint32_t sz, const void *data)
     {
-        if (address < base_addr)
+        if (address < mBaseAddr)
             return;
-        address = address - base_addr;
-        sz = ClampSize(size, address, sz);
-        memcpy(memory.data() + address, data, sz);
+        address = address - mBaseAddr;
+        sz = ClampSize(mSize, address, sz);
+        memcpy(mMemory.data() + address, data, sz);
     }
 
     virtual uint32_t GetSize() const
     {
-        return size + base_addr;
+        return mSize + mBaseAddr;
     }
     virtual bool IsReadonly() const
     {
@@ -304,25 +304,25 @@ class SimDDR : public MemoryInterface
     }
 
   private:
-    std::vector<uint8_t> memory;
-    uint32_t size;
-    uint32_t base_addr;
+    std::vector<uint8_t> mMemory;
+    uint32_t mSize;
+    uint32_t mBaseAddr;
 
     // Memory timing parameters
-    int read_latency = 2;  // Default read latency in clock cycles
-    int write_latency = 1; // Default write latency in clock cycles
+    int mReadLatency = 2;  // Default read latency in clock cycles
+    int mWriteLatency = 1; // Default write latency in clock cycles
 
     // Internal state
-    bool busy;
-    int busy_counter;
-    bool read_complete;
-    bool pending_read;
-    uint32_t pending_addr;
-    uint64_t pending_rdata;
+    bool mBusy;
+    int mBusyCounter;
+    bool mReadComplete;
+    bool mPendingRead;
+    uint32_t mPendingAddr;
+    uint64_t mPendingRdata;
 
     // Burst operation state
-    uint8_t burst_counter; // Counter for remaining words in burst
-    uint8_t burst_size;    // Total size of current burst
+    uint8_t mBurstCounter; // Counter for remaining words in burst
+    uint8_t mBurstSize;    // Total size of current burst
 };
 
 // SimDDR global instance is now provided via sim_core.h

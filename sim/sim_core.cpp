@@ -33,12 +33,12 @@ SimCore::~SimCore()
     Shutdown();
 }
 
-#define unique_memory_16b(instance, size)                                                                                                  \
+#define UNIQUE_MEMORY_16B(instance, size)                                                                                                   \
     std::make_unique<Memory16b>(mTop->rootp->PGM_SIGNAL(instance, ram_l).m_storage, mTop->rootp->PGM_SIGNAL(instance, ram_h).m_storage, size)
 
-#define unique_memory_8b(instance, size) std::make_unique<Memory8b>(mTop->rootp->PGM_SIGNAL(instance, ram).m_storage, size)
+#define UNIQUE_MEMORY_8B(instance, size) std::make_unique<Memory8b>(mTop->rootp->PGM_SIGNAL(instance, ram).m_storage, size)
 
-#define unique_memory_8b_2(instance1, instance2, size)                                                                                     \
+#define UNIQUE_MEMORY_8B_2(instance1, instance2, size)                                                                                      \
     std::make_unique<Memory8b>(mTop->rootp->PGM_SIGNAL(instance1, instance2, ram).m_storage, size)
 
 void SimCore::Init()
@@ -59,10 +59,10 @@ void SimCore::Init()
 
     mGfxCache = std::make_unique<GfxCache>();
 
-    SetMemory(MemoryRegion::WORK_RAM, unique_memory_16b(work_ram, 128 * 1024));
-    SetMemory(MemoryRegion::AUDIO_RAM, unique_memory_16b(aram, 64 * 1024));
-    SetMemory(MemoryRegion::VIDEO_RAM, unique_memory_16b(vram, 64 * 1024));
-    SetMemory(MemoryRegion::PALETTE_RAM, unique_memory_8b(palram, 32 * 1024));
+    SetMemory(MemoryRegion::WORK_RAM, UNIQUE_MEMORY_16B(work_ram, 128 * 1024));
+    SetMemory(MemoryRegion::AUDIO_RAM, UNIQUE_MEMORY_16B(aram, 64 * 1024));
+    SetMemory(MemoryRegion::VIDEO_RAM, UNIQUE_MEMORY_16B(vram, 64 * 1024));
+    SetMemory(MemoryRegion::PALETTE_RAM, UNIQUE_MEMORY_8B(palram, 32 * 1024));
     SetMemory(MemoryRegion::BIOS_ROM, std::make_unique<MemorySlice>(*mSDRAM, CPU_ROM_SDR_BASE, 1024 * 1024));
     SetMemory(MemoryRegion::TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, TILE_ROM_SDR_BASE, 16 * 1024 * 1024));
     SetMemory(MemoryRegion::MUSIC_ROM, std::make_unique<MemorySlice>(*mSDRAM, MUSIC_ROM_SDR_BASE, 16 * 1024 * 1024));
@@ -78,10 +78,10 @@ void SimCore::Tick(int count)
     {
         mTotalTicks++;
 
-        mSDRAM->update_channel_64(0, 1, mTop->sdr_addr, mTop->sdr_req, mTop->sdr_rw, mTop->sdr_be, mTop->sdr_data, &mTop->sdr_q, &mTop->sdr_ack);
-        mVideo->clock(mTop->ce_pixel != 0, mTop->hblank != 0, mTop->vblank != 0, mTop->red, mTop->green, mTop->blue);
+        mSDRAM->UpdateChannel64(0, 1, mTop->sdr_addr, mTop->sdr_req, mTop->sdr_rw, mTop->sdr_be, mTop->sdr_data, &mTop->sdr_q, &mTop->sdr_ack);
+        mVideo->Clock(mTop->ce_pixel != 0, mTop->hblank != 0, mTop->vblank != 0, mTop->red, mTop->green, mTop->blue);
 
-        mDDRMemory->clock(mTop->ddr_addr, mTop->ddr_wdata, mTop->ddr_rdata, mTop->ddr_read, mTop->ddr_write, mTop->ddr_busy,
+        mDDRMemory->Clock(mTop->ddr_addr, mTop->ddr_wdata, mTop->ddr_rdata, mTop->ddr_read, mTop->ddr_write, mTop->ddr_busy,
                           mTop->ddr_read_complete, mTop->ddr_burstcnt, mTop->ddr_byteenable);
 
         mContextp->timeInc(1);
@@ -107,7 +107,7 @@ void SimCore::Tick(int count)
     }
 }
 
-bool SimCore::TickUntil(std::function<bool()> until, int limit)
+bool SimCore::TickUntil(std::function<bool()> until, int limit) // NOLINT(readability-identifier-naming)
 {
     int count = 0;
     while (!until())
@@ -232,7 +232,7 @@ bool SimCore::SendIOCTLDataDDR(uint8_t index, uint32_t addr, const std::vector<u
 {
     printf("Starting DDR ioctl download (index=%d, size=%zu, addr=%08x)\n", (int)index, data.size(), addr);
 
-    mDDRMemory->load_data(data, addr, 1);
+    mDDRMemory->LoadData(data, addr, 1);
     mTop->reset = 1;
     mTop->ioctl_download = 1;
     mTop->ioctl_index = index;
@@ -269,17 +269,17 @@ void SimCore::WaitForIOCTLReady()
     }
 }
 
-void SimCore::SetGame(game_t game)
+void SimCore::SetGame(Game game)
 {
     mTop->rootp->sim_top__DOT__board_cfg = game << 8;
 }
 
-game_t SimCore::GetGame() const
+Game SimCore::GetGame() const
 {
-    return (game_t)(mTop->rootp->sim_top__DOT__board_cfg >> 8);
+    return (Game)(mTop->rootp->sim_top__DOT__board_cfg >> 8);
 }
 
 const char *SimCore::GetGameName() const
 {
-    return game_name(GetGame());
+    return GameName(GetGame());
 }

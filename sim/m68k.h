@@ -21,6 +21,7 @@ struct M68KMemory
     const MemoryInterface& mMemory;
 };
 
+// NOLINTBEGIN(readability-identifier-naming)
 union M68KRegisters
 {
     uint32_t r[17];
@@ -47,6 +48,7 @@ union M68KRegisters
         uint32_t SSP;
     };
 };
+// NOLINTEND(readability-identifier-naming)
 
 class M68K
 {

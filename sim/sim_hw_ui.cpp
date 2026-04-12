@@ -41,4 +41,4 @@ class M68000Window : public Window
     }
 };
 
-M68000Window s_M68000Window;
+M68000Window gM68000Window;

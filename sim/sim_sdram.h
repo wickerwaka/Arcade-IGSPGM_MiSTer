@@ -24,7 +24,7 @@ class SimSDRAM : public MemoryInterface
         mData = nullptr;
     }
 
-    void update_channel_16(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint16_t din, uint16_t *dout, uint8_t *ack)
+    void UpdateChannel16(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint16_t din, uint16_t *dout, uint8_t *ack)
     {
         if (req == *ack)
             return;
@@ -52,7 +52,7 @@ class SimSDRAM : public MemoryInterface
         }
     }
 
-    void update_channel_32(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint32_t din, uint32_t *dout, uint8_t *ack)
+    void UpdateChannel32(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint32_t din, uint32_t *dout, uint8_t *ack)
     {
         if (req == *ack)
             return;
@@ -84,7 +84,7 @@ class SimSDRAM : public MemoryInterface
         }
     }
 
-    void update_channel_64(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint64_t din, uint64_t *dout, uint8_t *ack)
+    void UpdateChannel64(int ch, int dly, uint32_t addr, uint8_t req, uint8_t rw, uint8_t be, uint64_t din, uint64_t *dout, uint8_t *ack)
     {
         if (req == *ack)
             return;
@@ -126,10 +126,10 @@ class SimSDRAM : public MemoryInterface
         }
     }
 
-    bool load_data(const char *name, int offset, int stride)
+    bool LoadData(const char *name, int offset, int stride)
     {
         std::vector<uint8_t> buffer;
-        if (!g_fs.LoadFile(name, buffer))
+        if (!gFileSearch.LoadFile(name, buffer))
         {
             printf("Failed to find file: %s\n", name);
             return false;
@@ -146,10 +146,10 @@ class SimSDRAM : public MemoryInterface
         return true;
     }
 
-    bool load_data16be(const char *name, int offset, int stride)
+    bool LoadData16be(const char *name, int offset, int stride)
     {
         std::vector<uint8_t> buffer;
-        if (!g_fs.LoadFile(name, buffer))
+        if (!gFileSearch.LoadFile(name, buffer))
         {
             printf("Failed to find file: %s\n", name);
             return false;
@@ -174,7 +174,7 @@ class SimSDRAM : public MemoryInterface
         return true;
     }
 
-    bool save_data(const char *filename)
+    bool SaveData(const char *filename)
     {
         FILE *fp = fopen(filename, "wb");
         if (fp == nullptr)

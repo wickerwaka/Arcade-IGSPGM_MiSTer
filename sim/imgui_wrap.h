@@ -9,15 +9,15 @@
 #include <string>
 #include <vector>
 
-bool imgui_init(const char *title);
-bool imgui_begin_frame();
-void imgui_end_frame();
-void imgui_set_title(const char *title);
+bool ImguiInit(const char *title);
+bool ImguiBeginFrame();
+void ImguiEndFrame();
+void ImguiSetTitle(const char *title);
 
-uint32_t imgui_get_buttons();
+uint32_t ImguiGetButtons();
 
 struct SDL_Renderer;
-SDL_Renderer *imgui_get_renderer();
+SDL_Renderer *ImguiGetRenderer();
 
 class Window
 {
@@ -33,17 +33,17 @@ class Window
     virtual void Draw() = 0;
 
     static void SortWindows();
-    static void *SettingsHandler_ReadOpen(ImGuiContext *, ImGuiSettingsHandler *, const char *name);
-    static void SettingsHandler_ReadLine(ImGuiContext *, ImGuiSettingsHandler *, void *entry, const char *line);
-    static void SettingsHandler_WriteAll(ImGuiContext *, ImGuiSettingsHandler *handler, ImGuiTextBuffer *buf);
+    static void *SettingsHandlerReadOpen(ImGuiContext *, ImGuiSettingsHandler *, const char *name);
+    static void SettingsHandlerReadLine(ImGuiContext *, ImGuiSettingsHandler *, void *entry, const char *line);
+    static void SettingsHandlerWriteAll(ImGuiContext *, ImGuiSettingsHandler *handler, ImGuiTextBuffer *buf);
 
-    std::string m_title;
-    bool m_enabled;
-    ImGuiWindowFlags m_flags;
+    std::string mTitle;
+    bool mEnabled;
+    ImGuiWindowFlags mFlags;
 
-    Window *m_next;
-    static Window *s_head;
-    static std::vector<Window *> s_windows;
+    Window *mNext;
+    static Window *gHead;
+    static std::vector<Window *> gWindows;
 };
 
 #endif // IMGUI_WRAP_H

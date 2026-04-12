@@ -6,7 +6,7 @@ This document describes the C++ naming conventions used in the sim/ directory an
 
 ### Types (Classes, Structs, Enums, Typedefs, Type Aliases)
 - **Convention**: UpperCamelCase
-- **Examples**: `SimCore`, `SimVideo`, `MemoryRegion`, `GameT`
+- **Examples**: `SimCore`, `SimVideo`, `MemoryRegion`
 
 ### Functions and Methods
 - **Convention**: UpperCamelCase

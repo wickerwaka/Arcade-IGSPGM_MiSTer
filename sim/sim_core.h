@@ -88,8 +88,8 @@ class SimCore
         return mTotalTicks;
     }
 
-    void SetGame(game_t game);
-    game_t GetGame() const;
+    void SetGame(Game game);
+    Game GetGame() const;
     const char *GetGameName() const;
 
     MemoryInterface &Memory(MemoryRegion region)

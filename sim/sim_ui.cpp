@@ -13,12 +13,12 @@
 #include "sim_sdram.h"
 #include "sim_ddr.h"
 
-extern SimState *state_manager;
+extern SimState *gStateManager;
 
-static CommandQueue *g_command_queue = nullptr;
+static CommandQueue *gCommandQueue = nullptr;
 
-extern uint32_t dipswitch_a;
-extern uint32_t dipswitch_b;
+extern uint32_t gDipswitchA;
+extern uint32_t gDipswitchB;
 
 class MemoryInterfaceEditor : public MemoryEditor
 {
@@ -37,54 +37,54 @@ class MemoryInterfaceEditor : public MemoryEditor
 
     static ImU8 ReadMem(const ImU8 *, size_t off, void *user)
     {
-        MemoryInterfaceEditor *_this = (MemoryInterfaceEditor *)user;
+        MemoryInterfaceEditor *selfPtr = (MemoryInterfaceEditor *)user;
         ImU8 data;
-        _this->mMemory.Read(off, 1, &data);
+        selfPtr->mMemory.Read(off, 1, &data);
         return data;
     }
 
     static void WriteMem(ImU8 *, size_t off, ImU8 data, void *user)
     {
-        MemoryInterfaceEditor *_this = (MemoryInterfaceEditor *)user;
-        _this->mMemory.Write(off, 1, &data);
+        MemoryInterfaceEditor *selfPtr = (MemoryInterfaceEditor *)user;
+        selfPtr->mMemory.Write(off, 1, &data);
     }
 
     MemoryInterface &mMemory;
 };
 
-void ui_init(const char *title)
+void UiInit(const char *title)
 {
-    imgui_init(title);
+    ImguiInit(title);
 }
 
-void ui_set_command_queue(CommandQueue *queue)
+void UiSetCommandQueue(CommandQueue *queue)
 {
-    g_command_queue = queue;
+    gCommandQueue = queue;
 }
 
-bool ui_begin_frame()
+bool UiBeginFrame()
 {
-    return imgui_begin_frame();
+    return ImguiBeginFrame();
 }
 
-void ui_end_frame()
+void UiEndFrame()
 {
-    imgui_end_frame();
+    ImguiEndFrame();
 }
 
-static bool refresh_state_files = true;
+static bool gRefreshStateFiles = true;
 
-void ui_game_changed()
+void UiGameChanged()
 {
     char title[64];
     const char *name = gSimCore.GetGameName();
 
     snprintf(title, sizeof(title), "IGS PGM - %s", name);
-    imgui_set_title(title);
-    refresh_state_files = true;
+    ImguiSetTitle(title);
+    gRefreshStateFiles = true;
 }
 
-void ui_draw()
+void UiDraw()
 {
     if (ImGui::Begin("Simulation Control"))
     {
@@ -104,7 +104,7 @@ void ui_draw()
 
         if (ImGui::Button("Reset"))
         {
-            g_command_queue->add(Command(CommandType::RESET, 100));
+            gCommandQueue->Add(Command(CommandType::RESET, 100));
         }
 
         ImGui::SameLine();
@@ -115,66 +115,66 @@ void ui_draw()
         // Save/Restore State Section
         ImGui::Text("Save/Restore State");
 
-        static char state_filename[256] = "state.pgmstate";
-        ImGui::InputText("State Filename", state_filename, sizeof(state_filename));
+        static char sStateFilename[256] = "state.pgmstate";
+        ImGui::InputText("State Filename", sStateFilename, sizeof(sStateFilename));
 
-        static std::vector<std::string> state_files;
-        static int selected_state_file = -1;
+        static std::vector<std::string> sStateFiles;
+        static int sSelectedStateFile = -1;
 
         // Auto-generate filename when file list is loaded/updated
-        if (refresh_state_files)
+        if (gRefreshStateFiles)
         {
-            state_files = state_manager->get_pgmstate_files();
-            std::string auto_name = state_manager->generate_next_state_name();
-            strncpy(state_filename, auto_name.c_str(), sizeof(state_filename) - 1);
-            state_filename[sizeof(state_filename) - 1] = '\0';
-            refresh_state_files = false;
+            sStateFiles = gStateManager->GetPgmstateFiles();
+            std::string autoName = gStateManager->GenerateNextStateName();
+            strncpy(sStateFilename, autoName.c_str(), sizeof(sStateFilename) - 1);
+            sStateFilename[sizeof(sStateFilename) - 1] = '\0';
+            gRefreshStateFiles = false;
         }
 
         if (ImGui::Button("Save State"))
         {
             // Ensure filename has .pgmstate extension
-            std::string filename = state_filename;
+            std::string filename = sStateFilename;
             if (filename.size() < 9 || filename.substr(filename.size() - 9) != ".pgmstate")
             {
                 filename += ".pgmstate";
-                strncpy(state_filename, filename.c_str(), sizeof(state_filename) - 1);
-                state_filename[sizeof(state_filename) - 1] = '\0';
+                strncpy(sStateFilename, filename.c_str(), sizeof(sStateFilename) - 1);
+                sStateFilename[sizeof(sStateFilename) - 1] = '\0';
             }
 
-            if (state_manager->save_state(state_filename))
+            if (gStateManager->SaveState(sStateFilename))
             {
                 // Update file list after successfully saving
-                state_files = state_manager->get_pgmstate_files();
+                sStateFiles = gStateManager->GetPgmstateFiles();
                 // Try to select the newly saved file
-                for (size_t i = 0; i < state_files.size(); i++)
+                for (size_t i = 0; i < sStateFiles.size(); i++)
                 {
-                    if (state_files[i] == state_filename)
+                    if (sStateFiles[i] == sStateFilename)
                     {
-                        selected_state_file = i;
+                        sSelectedStateFile = i;
                         break;
                     }
                 }
                 // Auto-generate next filename after successful save
-                std::string auto_name = state_manager->generate_next_state_name();
-                strncpy(state_filename, auto_name.c_str(), sizeof(state_filename) - 1);
-                state_filename[sizeof(state_filename) - 1] = '\0';
+                std::string autoName = gStateManager->GenerateNextStateName();
+                strncpy(sStateFilename, autoName.c_str(), sizeof(sStateFilename) - 1);
+                sStateFilename[sizeof(sStateFilename) - 1] = '\0';
             }
         }
 
         // Show list of state files
-        if (state_files.size() > 0)
+        if (sStateFiles.size() > 0)
         {
             ImGui::Text("Available State Files:");
             ImGui::BeginChild("StateFiles", ImVec2(0, 100), true);
-            for (size_t i = 0; i < state_files.size(); i++)
+            for (size_t i = 0; i < sStateFiles.size(); i++)
             {
-                if (ImGui::Selectable(state_files[i].c_str(), selected_state_file == (int)i, ImGuiSelectableFlags_AllowDoubleClick))
+                if (ImGui::Selectable(sStateFiles[i].c_str(), sSelectedStateFile == (int)i, ImGuiSelectableFlags_AllowDoubleClick))
                 {
-                    selected_state_file = (int)i;
+                    sSelectedStateFile = (int)i;
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
-                        state_manager->restore_state(state_files[i].c_str());
+                        gStateManager->RestoreState(sStateFiles[i].c_str());
                     }
                 }
             }
@@ -243,7 +243,7 @@ class DipswitchWindow : public Window
             {
                 ImGui::TableNextColumn();
                 ImGui::PushID(i);
-                ImGui::CheckboxFlags("##dwsa", &dipswitch_a, ((uint32_t)1 << i));
+                ImGui::CheckboxFlags("##dwsa", &gDipswitchA, ((uint32_t)1 << i));
                 ImGui::PopID();
             }
             ImGui::TableNextColumn();
@@ -252,7 +252,7 @@ class DipswitchWindow : public Window
             {
                 ImGui::TableNextColumn();
                 ImGui::PushID(i);
-                ImGui::CheckboxFlags("##dwsb", &dipswitch_b, ((uint32_t)1 << i));
+                ImGui::CheckboxFlags("##dwsb", &gDipswitchB, ((uint32_t)1 << i));
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -260,7 +260,7 @@ class DipswitchWindow : public Window
     }
 };
 
-DipswitchWindow s_DipswitchWindow;
+DipswitchWindow gDipswitchWindow;
 
 class ROMWindow : public Window
 {
@@ -306,7 +306,7 @@ class ROMWindow : public Window
     }
 };
 
-ROMWindow s_ROMWindow;
+ROMWindow gRomWindow;
 
 class RAMWindow : public Window
 {
@@ -353,4 +353,4 @@ class RAMWindow : public Window
     }
 };
 
-RAMWindow s_RAMWindow;
+RAMWindow gRamWindow;

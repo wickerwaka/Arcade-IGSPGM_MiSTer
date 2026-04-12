@@ -8,25 +8,26 @@
 #include <vector>
 
 // Example function showing how to use MRA loader in the simulator
-bool loadGameFromMRA(const std::string &mraPath, const std::string &romPath)
+bool LoadGameFromMRA(const std::string &mraPath, const std::string &romPath)
 {
     // Add ROM search path
-    g_fs.addSearchPath(romPath);
+    gFileSearch.AddSearchPath(romPath);
 
     // Also add the directory containing the MRA file as a search path
     size_t lastSlash = mraPath.find_last_of("/\\");
     if (lastSlash != std::string::npos)
     {
-        g_fs.addSearchPath(mraPath.substr(0, lastSlash));
+        gFileSearch.AddSearchPath(mraPath.substr(0, lastSlash));
     }
 
     // Load the MRA
     MRALoader loader;
     std::vector<uint8_t> romData;
 
-    if (!loader.load(mraPath, romData))
+    uint32_t address = 0;
+    if (!loader.Load(mraPath, romData, address))
     {
-        std::cerr << "Failed to load MRA: " << loader.getLastError() << std::endl;
+        std::cerr << "Failed to load MRA: " << loader.GetLastError() << std::endl;
         return false;
     }
 
@@ -58,4 +59,4 @@ bool loadGameFromMRA(const std::string &mraPath, const std::string &romPath)
 }
 
 // Example usage:
-// loadGameFromMRA("releases/Drift Out (Europe).mra", "roms/");
+// LoadGameFromMRA("releases/Drift Out (Europe).mra", "roms/");
