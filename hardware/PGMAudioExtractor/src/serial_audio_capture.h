@@ -16,6 +16,10 @@ typedef struct {
 } serial_audio_capture_config_t;
 
 void serial_audio_capture_init(const serial_audio_capture_config_t *config, stereo_ring_buffer_t *target_buffer);
+void serial_audio_capture_enable(void);
 void serial_audio_capture_task(void);
+bool serial_audio_capture_is_running(void);
+uint32_t serial_audio_capture_get_dropped_dma_blocks(void);
+uint32_t serial_audio_capture_get_dropped_audio_frames(void);
 
 #endif

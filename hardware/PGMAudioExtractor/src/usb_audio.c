@@ -9,7 +9,7 @@
 #include "usb_descriptors.h"
 
 #ifndef PGM_AUDIO_MIN_SAMPLE_RATE
-#define PGM_AUDIO_MIN_SAMPLE_RATE 33800u
+#define PGM_AUDIO_MIN_SAMPLE_RATE 32000u
 #endif
 
 #ifndef PGM_AUDIO_MAX_SAMPLE_RATE

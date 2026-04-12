@@ -13,7 +13,6 @@ pico_sdk_init()
 
 add_executable(pgm_audio_extractor
     src/main.c
-    src/reset_interface_app.c
     src/usb_audio.c
     src/usb_descriptors.c
     src/serial_audio_capture.c
@@ -31,6 +30,7 @@ target_include_directories(pgm_audio_extractor PRIVATE
 
 target_link_libraries(pgm_audio_extractor PRIVATE
     pico_stdlib
+    pico_usb_reset_interface_headers
     tinyusb_device
     tinyusb_board
     hardware_pio
@@ -44,10 +44,14 @@ target_link_libraries(pgm_audio_extractor PRIVATE
 )
 
 target_compile_definitions(pgm_audio_extractor PRIVATE
-    PGM_AUDIO_MIN_SAMPLE_RATE=33800
+    PGM_AUDIO_MIN_SAMPLE_RATE=32000
     PGM_AUDIO_MAX_SAMPLE_RATE=44100
     PGM_AUDIO_NOMINAL_SAMPLE_RATE=44100
-    PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=0
+    PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_BOOTSEL=1
+    PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_FLASH_BOOT=1
+    PICO_STDIO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK=0
+    PICO_STDIO_USB_RESET_RESET_TO_FLASH_DELAY_MS=100
     PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
 )
 

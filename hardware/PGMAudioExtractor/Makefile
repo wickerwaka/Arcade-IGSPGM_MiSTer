@@ -44,7 +44,7 @@ load: uf2
 monitor:
 	@port='$(PORT)'; \
 	if [[ -z "$$port" ]]; then \
-		port=$$(ls /dev/tty.usbmodem* /dev/cu.usbmodem* /dev/tty.usbserial* /dev/cu.usbserial* /dev/tty.debug-console /dev/cu.debug-console 2>/dev/null | head -n 1); \
+		port=$$(ls /dev/tty.usbmodem* 2>/dev/null | head -n 1); \
 	fi; \
 	if [[ -z "$$port" ]]; then \
 		echo "No serial port found. Set PORT=/dev/cu.<device>"; \

@@ -3,6 +3,7 @@
 #include "bsp/board_api.h"
 #include "hardware/watchdog.h"
 #include "pico/bootrom.h"
+#include "pico/unique_id.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
 
@@ -92,9 +93,15 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
             memcpy(&desc_str[1], string_desc_arr[0], 2);
             chr_count = 1;
             break;
-        case STRID_SERIAL:
-            chr_count = board_usb_get_serial(desc_str + 1, 32);
+        case STRID_SERIAL: {
+            char serial[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
+            pico_get_unique_board_id_string(serial, sizeof(serial));
+            chr_count = strlen(serial);
+            for (size_t i = 0; i < chr_count; ++i) {
+                desc_str[1 + i] = serial[i];
+            }
             break;
+        }
         default: {
             if (index >= (sizeof(string_desc_arr) / sizeof(string_desc_arr[0]))) {
                 return NULL;
