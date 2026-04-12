@@ -18,12 +18,14 @@ IGS023Sprite SPRITE_BUFFER[256];
 
 void level6_handler()
 {
-    igs023_ack_irq6();
+    if( !page_irq6() )
+        igs023_ack_irq6();
 }
 
 void level4_handler()
 {
-    igs023_ack_irq4();
+    if( !page_irq4() )
+        igs023_ack_irq4();
 }
 
 void illegal_instruction_handler()

@@ -347,7 +347,6 @@ always @(posedge clk) begin
 
         if (~irq4_en) begin
             irq4 <= 0;
-            irq4_cnt <= 0;
         end
 
         if (~vblank & vblank_prev) begin
@@ -355,12 +354,11 @@ always @(posedge clk) begin
         end else if (hblank & ~hblank_prev) begin
             ctrl[7] <= ctrl[7] + 1;
 
-            if (irq4_en) begin
-                if (irq4_cnt == 61) begin
-                    irq4 <= 1;
-                end else begin
-                    irq4_cnt <= irq4_cnt + 1;
-                end
+            if (irq4_cnt == 61) begin
+                if (irq4_en) irq4 <= 1;
+                irq4_cnt <= 0;
+            end else begin
+                irq4_cnt <= irq4_cnt + 1;
             end
         end
 

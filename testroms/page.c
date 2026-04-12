@@ -3,7 +3,7 @@
 
 #include "util.h"
 #include "page.h"
-
+#include "interrupts.h"
 
 static Page *s_head_page = NULL;
 static Page *s_active_page = NULL;
@@ -35,6 +35,8 @@ Page *page_get_active()
 
 void page_set_active(Page *page)
 {
+    disable_interrupts();
+
     if (s_active_page)
     {
         if (s_active_page->deinit)
@@ -52,8 +54,30 @@ void page_set_active(Page *page)
             s_active_page->init();
         }
     }
+
+    enable_interrupts();
 }
-    
+
+bool page_irq4()
+{
+    if (s_active_page && s_active_page->irq4)
+    {
+        s_active_page->irq4();
+        return true;
+    }
+    return false;
+}
+
+bool page_irq6()
+{
+    if (s_active_page && s_active_page->irq6)
+    {
+        s_active_page->irq6();
+        return true;
+    }
+    return false;
+}
+
 void page_set_next_active()
 {
     if (s_active_page && s_active_page->next)

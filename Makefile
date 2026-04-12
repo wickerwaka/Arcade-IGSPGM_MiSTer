@@ -68,7 +68,7 @@ debug/%:
 	$(MAKE) -j8 -C testroms debug TARGET=$*
 
 
-picorom: picorom/pgm
+picorom: picorom/pgm_test
 
 picorom/%:
 	$(MAKE) -j8 -C testroms picorom TARGET=$*
