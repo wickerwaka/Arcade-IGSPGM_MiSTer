@@ -328,10 +328,46 @@ ControllerResult<MemoryReadResult> SimController::ReadMemory(const std::string &
     return ControllerResult<MemoryReadResult>::Success(result);
 }
 
+ControllerResult<EmptyResult> SimController::WriteMemory(const std::string &region, uint32_t address, const std::vector<uint8_t> &data)
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return initResult;
+
+    auto regionResult = ParseRegion(region);
+    if (!regionResult.ok)
+    {
+        return ControllerResult<EmptyResult>::Failure(regionResult.errorCode, regionResult.errorMessage);
+    }
+
+    gSimCore.Memory(regionResult.value).Write(address, static_cast<uint32_t>(data.size()), data.data());
+    return ControllerResult<EmptyResult>::Success({});
+}
+
 ControllerResult<std::vector<std::string>> SimController::ListRegions() const
 {
     return ControllerResult<std::vector<std::string>>::Success(
         {"BIOS_ROM", "PROGRAM_ROM", "PALETTE_RAM", "VIDEO_RAM", "WORK_RAM", "AUDIO_RAM", "TILE_ROM", "MUSIC_ROM", "B_ROM", "A_ROM"});
+}
+
+ControllerResult<SignalReadResult> SimController::ReadSignal(const std::string &signal) const
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+    {
+        return ControllerResult<SignalReadResult>::Failure(initResult.errorCode, initResult.errorMessage);
+    }
+
+    static const std::vector<std::string> kSignals = {"vblank", "hblank", "reset", "rom_load_busy", "ss_state_out"};
+    if (std::find(kSignals.begin(), kSignals.end(), signal) == kSignals.end())
+    {
+        return ControllerResult<SignalReadResult>::Failure("invalid_signal", "Unknown signal: " + signal);
+    }
+
+    SignalReadResult result;
+    result.mSignal = signal;
+    result.mValue = ReadSignalValue(signal);
+    return ControllerResult<SignalReadResult>::Success(result);
 }
 
 ControllerResult<EmptyResult> SimController::SetDipSwitchA(uint8_t value)

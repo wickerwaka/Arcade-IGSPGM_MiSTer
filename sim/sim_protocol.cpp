@@ -407,6 +407,26 @@ std::string BytesToHex(const std::vector<uint8_t> &data)
     return out.str();
 }
 
+std::vector<uint8_t> HexToBytes(const std::string &hex)
+{
+    if ((hex.size() & 1U) != 0)
+        throw std::runtime_error("Hex string must have even length");
+
+    std::vector<uint8_t> data;
+    data.reserve(hex.size() / 2);
+    for (size_t i = 0; i < hex.size(); i += 2)
+    {
+        unsigned int byte = 0;
+        std::stringstream ss;
+        ss << std::hex << hex.substr(i, 2);
+        ss >> byte;
+        if (ss.fail())
+            throw std::runtime_error("Invalid hex data");
+        data.push_back(static_cast<uint8_t>(byte));
+    }
+    return data;
+}
+
 std::string RunStopReasonString(RunStopReason reason)
 {
     switch (reason)
@@ -629,6 +649,14 @@ std::string SimProtocol::HandleLine(const std::string &line)
             });
             return SerializeJson(WrapControllerResult(id, result, payload));
         }
+        if (method == "memory.write")
+        {
+            auto result = mController.WriteMemory(
+                RequireString(RequireObjectField(params, "region"), "region"),
+                static_cast<uint32_t>(RequireNumber(RequireObjectField(params, "address"), "address")),
+                HexToBytes(RequireString(RequireObjectField(params, "data_hex"), "data_hex")));
+            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+        }
         if (method == "memory.list_regions")
         {
             auto result = mController.ListRegions();
@@ -636,6 +664,15 @@ std::string SimProtocol::HandleLine(const std::string &line)
             for (const auto &region : result.value)
                 regions.push_back(JsonValue::String(region));
             return SerializeJson(WrapControllerResult(id, result, JsonValue::Array(std::move(regions))));
+        }
+        if (method == "signal.read")
+        {
+            auto result = mController.ReadSignal(RequireString(RequireObjectField(params, "name"), "name"));
+            JsonValue payload = JsonValue::Object({
+                {"name", JsonValue::String(result.value.mSignal)},
+                {"value", JsonValue::Number(result.value.mValue)},
+            });
+            return SerializeJson(WrapControllerResult(id, result, payload));
         }
         if (method == "state.list")
         {

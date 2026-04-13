@@ -80,6 +80,12 @@ struct MemoryReadResult
     std::vector<uint8_t> mData;
 };
 
+struct SignalReadResult
+{
+    std::string mSignal;
+    uint64_t mValue = 0;
+};
+
 struct ScreenshotResult
 {
     std::string mPath;
@@ -135,7 +141,9 @@ class SimController
     ControllerResult<CpuState> GetCpuState() const;
 
     ControllerResult<MemoryReadResult> ReadMemory(const std::string &region, uint32_t address, uint32_t size) const;
+    ControllerResult<EmptyResult> WriteMemory(const std::string &region, uint32_t address, const std::vector<uint8_t> &data);
     ControllerResult<std::vector<std::string>> ListRegions() const;
+    ControllerResult<SignalReadResult> ReadSignal(const std::string &signal) const;
 
     ControllerResult<EmptyResult> SetDipSwitchA(uint8_t value);
     ControllerResult<EmptyResult> SetDipSwitchB(uint8_t value);
