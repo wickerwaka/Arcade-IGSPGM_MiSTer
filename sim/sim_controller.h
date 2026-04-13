@@ -41,6 +41,11 @@ struct EmptyResult
 {
 };
 
+struct InputStateResult
+{
+    uint32_t mButtons = 0;
+};
+
 enum class RunStopReason
 {
     COMPLETED,
@@ -171,6 +176,10 @@ class SimController
     ControllerResult<EmptyResult> SetDipSwitchB(uint8_t value);
     uint8_t GetDipSwitchA() const;
     uint8_t GetDipSwitchB() const;
+    ControllerResult<InputStateResult> GetInputState() const;
+    ControllerResult<EmptyResult> SetInput(const std::string &name, bool pressed);
+    ControllerResult<EmptyResult> ClearInput(const std::string &name);
+    ControllerResult<RunResult> PressInput(const std::string &name);
 
     ControllerResult<StateListResult> ListStates() const;
     ControllerResult<EmptyResult> SaveState(const std::string &filename);
@@ -195,6 +204,8 @@ class SimController
     ControllerResult<SignalReadResult> ReadSignalValueVpi(const std::string &signal) const;
     vpiHandle LookupVpiHandle(const std::string &signal) const;
     ControllerResult<SignalListResult> ListSignalsVpi() const;
+    ControllerResult<uint32_t> ParseInputBits(const std::string &name) const;
+    void ApplyInputState() const;
     RunStopReason ConvertTickStopReason(TickStopReason reason) const;
     ControllerResult<EmptyResult> EnsureInitialized() const;
 };

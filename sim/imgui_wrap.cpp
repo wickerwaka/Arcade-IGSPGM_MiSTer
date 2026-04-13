@@ -180,6 +180,21 @@ uint32_t ImguiGetButtons()
     return gButtons;
 }
 
+void ImguiSetButtons(uint32_t buttons)
+{
+    gButtons = buttons;
+}
+
+void ImguiSetButtonBits(uint32_t bits)
+{
+    gButtons |= bits;
+}
+
+void ImguiClearButtonBits(uint32_t bits)
+{
+    gButtons &= ~bits;
+}
+
 void ImguiEndFrame()
 {
     ImGui::Render();

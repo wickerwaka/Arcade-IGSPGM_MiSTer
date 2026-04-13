@@ -16,6 +16,9 @@ void ImguiEndFrame();
 void ImguiSetTitle(const char *title);
 
 uint32_t ImguiGetButtons();
+void ImguiSetButtons(uint32_t buttons);
+void ImguiSetButtonBits(uint32_t bits);
+void ImguiClearButtonBits(uint32_t bits);
 
 struct SDL_Renderer;
 SDL_Renderer *ImguiGetRenderer();

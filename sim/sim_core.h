@@ -88,6 +88,7 @@ class SimCore
     TickResult Tick(int count = 1);
     TickResult TickUntil(std::function<bool()> until, int limit);
     void Shutdown();
+    void SetSignalWatchpointCallback(std::function<bool()> callback);
 
     // Trace control methods
     void StartTrace(const char *filename, int depth = 1);
@@ -120,6 +121,7 @@ class SimCore
     // Verilator context and top module
     VerilatedContext *mContextp;
     std::unique_ptr<VerilatedFstC> mTfp;
+    std::function<bool()> mSignalWatchpointCallback;
 
     std::unique_ptr<MemoryInterface> mMemoryRegion[(int)MemoryRegion::COUNT];
 

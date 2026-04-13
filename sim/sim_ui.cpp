@@ -13,6 +13,145 @@
 
 #include <algorithm>
 #include <cstring>
+#include <sstream>
+
+namespace
+{
+struct WatchedSignal
+{
+    std::string mName;
+    bool mWatchpoint = false;
+    bool mInitialized = false;
+    uint64_t mLastValue = 0;
+    uint32_t mWidth = 0;
+    std::string mValueHex;
+    std::string mError;
+};
+
+std::vector<WatchedSignal> gWatchedSignals;
+std::string gSignalWatchStatus;
+std::vector<SignalInfo> gAvailableSignals;
+bool gRefreshAvailableSignals = true;
+
+void RefreshAvailableSignals()
+{
+    if (!gRefreshAvailableSignals)
+        return;
+
+    auto result = gSimController.ListSignals();
+    gAvailableSignals = result.ok ? result.value.mSignals : std::vector<SignalInfo>{};
+    gRefreshAvailableSignals = false;
+}
+
+void AddWatchedSignal(const std::string &name)
+{
+    if (name.empty())
+        return;
+
+    auto existing = std::find_if(gWatchedSignals.begin(), gWatchedSignals.end(), [&](const auto &signal) {
+        return signal.mName == name;
+    });
+    if (existing == gWatchedSignals.end())
+    {
+        gWatchedSignals.push_back({name});
+    }
+}
+
+void RemoveWatchedSignal(const std::string &name)
+{
+    auto it = std::remove_if(gWatchedSignals.begin(), gWatchedSignals.end(), [&](const auto &signal) { return signal.mName == name; });
+    gWatchedSignals.erase(it, gWatchedSignals.end());
+}
+
+static void *SignalSettingsReadOpen(ImGuiContext *, ImGuiSettingsHandler *, const char *name)
+{
+    return strcmp(name, "Signals") == 0 ? reinterpret_cast<void *>(1) : nullptr;
+}
+
+static void SignalSettingsReadLine(ImGuiContext *, ImGuiSettingsHandler *, void *, const char *line)
+{
+    char signalName[256] = {};
+    int watch = 0;
+    if (sscanf(line, "Watch=%255[^,],%d", signalName, &watch) == 2)
+    {
+        AddWatchedSignal(signalName);
+        auto it = std::find_if(gWatchedSignals.begin(), gWatchedSignals.end(), [&](const auto &signal) { return signal.mName == signalName; });
+        if (it != gWatchedSignals.end())
+        {
+            it->mWatchpoint = watch != 0;
+            it->mInitialized = false;
+        }
+        return;
+    }
+
+    if (sscanf(line, "Signal=%255[^\n]", signalName) == 1)
+    {
+        AddWatchedSignal(signalName);
+    }
+}
+
+static void SignalSettingsWriteAll(ImGuiContext *, ImGuiSettingsHandler *handler, ImGuiTextBuffer *buf)
+{
+    buf->appendf("[%s][Signals]\n", handler->TypeName);
+    for (const auto &signal : gWatchedSignals)
+    {
+        buf->appendf("Watch=%s,%d\n", signal.mName.c_str(), signal.mWatchpoint ? 1 : 0);
+    }
+    buf->append("\n");
+}
+
+void RegisterSignalSettingsHandler()
+{
+    ImGuiSettingsHandler iniHandler;
+    iniHandler.TypeName = "SimSignals";
+    iniHandler.TypeHash = ImHashStr("SimSignals");
+    iniHandler.ClearAllFn = nullptr;
+    iniHandler.ReadOpenFn = SignalSettingsReadOpen;
+    iniHandler.ReadLineFn = SignalSettingsReadLine;
+    iniHandler.ApplyAllFn = nullptr;
+    iniHandler.WriteAllFn = SignalSettingsWriteAll;
+    ImGui::AddSettingsHandler(&iniHandler);
+}
+
+bool CheckSignalWatchpoints()
+{
+    for (auto &signal : gWatchedSignals)
+    {
+        if (!signal.mWatchpoint)
+            continue;
+
+        auto result = gSimController.ReadSignal(signal.mName);
+        if (!result.ok)
+        {
+            signal.mError = result.errorMessage;
+            continue;
+        }
+
+        signal.mError.clear();
+        signal.mWidth = result.value.mWidth;
+        signal.mValueHex = result.value.mValueHex;
+
+        if (!signal.mInitialized)
+        {
+            signal.mLastValue = result.value.mValue;
+            signal.mValueHex = result.value.mValueHex;
+            signal.mInitialized = true;
+            continue;
+        }
+
+        if (signal.mLastValue != result.value.mValue)
+        {
+            std::string previousHex = signal.mValueHex;
+            gSignalWatchStatus = signal.mName + " changed from 0x" + previousHex + " to 0x" + result.value.mValueHex;
+            signal.mLastValue = result.value.mValue;
+            signal.mValueHex = result.value.mValueHex;
+            return true;
+        }
+    }
+
+    return false;
+}
+} // namespace
 
 class MemoryInterfaceEditor : public MemoryEditor
 {
@@ -49,11 +188,14 @@ class MemoryInterfaceEditor : public MemoryEditor
 void UiInit(const char *title)
 {
     ImguiInit(title);
+    RegisterSignalSettingsHandler();
 }
 
 void UiInitWindows()
 {
     ImguiInitWindows();
+    gSimCore.SetSignalWatchpointCallback(CheckSignalWatchpoints);
+    gRefreshAvailableSignals = true;
 }
 
 bool UiBeginFrame()
@@ -78,6 +220,7 @@ void UiGameChanged()
     ImguiSetTitle(title);
     RefreshMemoryWindows();
     gRefreshStateFiles = true;
+    gRefreshAvailableSignals = true;
 }
 
 void UiDraw()
@@ -105,6 +248,11 @@ void UiDraw()
 
         ImGui::SameLine();
         ImGui::Checkbox("Pause", &gSimCore.mSystemPause);
+
+        if (!gSignalWatchStatus.empty())
+        {
+            ImGui::TextWrapped("Signal watchpoint: %s", gSignalWatchStatus.c_str());
+        }
 
         ImGui::Separator();
 
@@ -288,6 +436,148 @@ class DipswitchWindow : public Window
 };
 
 DipswitchWindow gDipswitchWindow;
+
+class SignalsWindow : public Window
+{
+  public:
+    SignalsWindow() : Window("Signals")
+    {
+    }
+
+    void Init() override
+    {
+        gSignalWatchStatus.clear();
+        for (auto &signal : gWatchedSignals)
+        {
+            signal.mInitialized = false;
+            signal.mError.clear();
+        }
+    }
+
+    void Draw() override
+    {
+        static char sNewSignalName[256] = "";
+        static int sSelectedSignalIndex = -1;
+
+        RefreshAvailableSignals();
+
+        ImGui::InputText("Signal", sNewSignalName, sizeof(sNewSignalName));
+        ImGui::SameLine();
+        if (ImGui::Button("Add") && sNewSignalName[0] != '\0')
+        {
+            AddWatchedSignal(sNewSignalName);
+            sNewSignalName[0] = '\0';
+        }
+
+        if (ImGui::BeginCombo("Available", sSelectedSignalIndex >= 0 && sSelectedSignalIndex < (int)gAvailableSignals.size()
+                                               ? gAvailableSignals[sSelectedSignalIndex].mName.c_str()
+                                               : "Select signal"))
+        {
+            for (int i = 0; i < (int)gAvailableSignals.size(); i++)
+            {
+                bool selected = sSelectedSignalIndex == i;
+                if (ImGui::Selectable(gAvailableSignals[i].mName.c_str(), selected))
+                {
+                    sSelectedSignalIndex = i;
+                    strncpy(sNewSignalName, gAvailableSignals[i].mName.c_str(), sizeof(sNewSignalName) - 1);
+                    sNewSignalName[sizeof(sNewSignalName) - 1] = '\0';
+                }
+                if (selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Refresh"))
+        {
+            gRefreshAvailableSignals = true;
+            RefreshAvailableSignals();
+        }
+
+        if (!gSignalWatchStatus.empty())
+        {
+            ImGui::TextWrapped("Last watchpoint hit: %s", gSignalWatchStatus.c_str());
+            if (ImGui::Button("Clear Status"))
+            {
+                gSignalWatchStatus.clear();
+            }
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::BeginTable("signals_table", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Watch", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Signal");
+            ImGui::TableSetupColumn("Value");
+            ImGui::TableSetupColumn("Width", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+            ImGui::TableHeadersRow();
+
+            for (size_t i = 0; i < gWatchedSignals.size();)
+            {
+                auto &signal = gWatchedSignals[i];
+                auto result = gSimController.ReadSignal(signal.mName);
+                if (result.ok)
+                {
+                    signal.mError.clear();
+                    signal.mWidth = result.value.mWidth;
+                    signal.mValueHex = result.value.mValueHex;
+                    if (!signal.mWatchpoint)
+                    {
+                        signal.mLastValue = result.value.mValue;
+                        signal.mInitialized = false;
+                    }
+                }
+                else
+                {
+                    signal.mError = result.errorMessage;
+                }
+
+                ImGui::TableNextRow();
+
+                ImGui::TableNextColumn();
+                ImGui::PushID(static_cast<int>(i));
+                bool watchpoint = signal.mWatchpoint;
+                if (ImGui::Checkbox("##watch", &watchpoint))
+                {
+                    signal.mWatchpoint = watchpoint;
+                    signal.mInitialized = false;
+                }
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(signal.mName.c_str());
+
+                ImGui::TableNextColumn();
+                if (signal.mError.empty())
+                    ImGui::Text("0x%s", signal.mValueHex.c_str());
+                else
+                    ImGui::TextUnformatted(signal.mError.c_str());
+
+                ImGui::TableNextColumn();
+                if (signal.mError.empty())
+                    ImGui::Text("%u", signal.mWidth);
+
+                ImGui::TableNextColumn();
+                bool remove = ImGui::Button("X");
+                ImGui::PopID();
+
+                if (remove)
+                {
+                    RemoveWatchedSignal(signal.mName);
+                    continue;
+                }
+
+                i++;
+            }
+
+            ImGui::EndTable();
+        }
+    }
+};
+
+SignalsWindow gSignalsWindow;
 
 class ROMWindow : public Window
 {

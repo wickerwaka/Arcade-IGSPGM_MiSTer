@@ -223,6 +223,7 @@ ControllerResult<RunResult> SimController::RunCycles(uint64_t cycles)
         return ControllerResult<RunResult>::Failure(initResult.errorCode, initResult.errorMessage);
     }
 
+    ApplyInputState();
     TickResult tickResult = gSimCore.Tick(static_cast<int>(cycles));
     RunResult runResult;
     runResult.mReason = ConvertTickStopReason(tickResult.mReason);
@@ -241,6 +242,7 @@ ControllerResult<RunResult> SimController::RunFrames(uint64_t frames)
     RunResult runResult;
     for (uint64_t i = 0; i < frames; i++)
     {
+        ApplyInputState();
         TickResult lowResult = gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; }, 10000000);
         runResult.mTicksExecuted += lowResult.mTicksExecuted;
         if (!lowResult.Succeeded())
@@ -290,6 +292,7 @@ ControllerResult<RunResult> SimController::RunUntil(const RunUntilRequest &reque
             return ControllerResult<RunResult>::Success(result);
         }
 
+        ApplyInputState();
         TickResult tickResult = gSimCore.Tick(1);
         ticks += tickResult.mTicksExecuted;
         if (tickResult.mReason != TickStopReason::COMPLETED)
@@ -465,6 +468,106 @@ ControllerResult<EmptyResult> SimController::SetDipSwitchB(uint8_t value)
     mDipSwitchB = value;
     gSimCore.mTop->dswb = mDipSwitchB;
     return ControllerResult<EmptyResult>::Success({});
+}
+
+ControllerResult<InputStateResult> SimController::GetInputState() const
+{
+    InputStateResult result;
+    result.mButtons = ImguiGetButtons();
+    return ControllerResult<InputStateResult>::Success(result);
+}
+
+ControllerResult<uint32_t> SimController::ParseInputBits(const std::string &name) const
+{
+    if (name == "left")
+        return ControllerResult<uint32_t>::Success(0x0002);
+    if (name == "right")
+        return ControllerResult<uint32_t>::Success(0x0001);
+    if (name == "down")
+        return ControllerResult<uint32_t>::Success(0x0004);
+    if (name == "up")
+        return ControllerResult<uint32_t>::Success(0x0008);
+    if (name == "button1" || name == "btn1" || name == "a")
+        return ControllerResult<uint32_t>::Success(0x0010);
+    if (name == "start")
+        return ControllerResult<uint32_t>::Success(0x00010000);
+
+    return ControllerResult<uint32_t>::Failure("invalid_input", "Unknown input: " + name);
+}
+
+void SimController::ApplyInputState() const
+{
+    if (!mInitialized)
+        return;
+
+    uint32_t buttons = ImguiGetButtons();
+    gSimCore.mTop->joystick_p1 = buttons & 0xffff;
+    gSimCore.mTop->start = (buttons >> 16) & 0xffff;
+}
+
+ControllerResult<EmptyResult> SimController::SetInput(const std::string &name, bool pressed)
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return initResult;
+
+    auto bitResult = ParseInputBits(name);
+    if (!bitResult.ok)
+        return ControllerResult<EmptyResult>::Failure(bitResult.errorCode, bitResult.errorMessage);
+
+    if (pressed)
+        ImguiSetButtonBits(bitResult.value);
+    else
+        ImguiClearButtonBits(bitResult.value);
+
+    ApplyInputState();
+    return ControllerResult<EmptyResult>::Success({});
+}
+
+ControllerResult<EmptyResult> SimController::ClearInput(const std::string &name)
+{
+    return SetInput(name, false);
+}
+
+ControllerResult<RunResult> SimController::PressInput(const std::string &name)
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return ControllerResult<RunResult>::Failure(initResult.errorCode, initResult.errorMessage);
+
+    auto bitResult = ParseInputBits(name);
+    if (!bitResult.ok)
+        return ControllerResult<RunResult>::Failure(bitResult.errorCode, bitResult.errorMessage);
+
+    RunResult totalResult;
+
+    ImguiSetButtonBits(bitResult.value);
+    ApplyInputState();
+
+    auto pressedResult = RunFrames(2);
+    if (!pressedResult.ok)
+        return pressedResult;
+    totalResult.mTicksExecuted += pressedResult.value.mTicksExecuted;
+    totalResult.mFramesExecuted += pressedResult.value.mFramesExecuted;
+    if (pressedResult.value.mReason != RunStopReason::COMPLETED)
+    {
+        totalResult.mReason = pressedResult.value.mReason;
+        ImguiClearButtonBits(bitResult.value);
+        ApplyInputState();
+        return ControllerResult<RunResult>::Success(totalResult);
+    }
+
+    ImguiClearButtonBits(bitResult.value);
+    ApplyInputState();
+
+    auto releasedResult = RunFrames(2);
+    if (!releasedResult.ok)
+        return releasedResult;
+    totalResult.mTicksExecuted += releasedResult.value.mTicksExecuted;
+    totalResult.mFramesExecuted += releasedResult.value.mFramesExecuted;
+    totalResult.mReason = releasedResult.value.mReason;
+
+    return ControllerResult<RunResult>::Success(totalResult);
 }
 
 uint8_t SimController::GetDipSwitchA() const

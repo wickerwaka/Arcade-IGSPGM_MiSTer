@@ -750,6 +750,27 @@ std::string SimProtocol::HandleLine(const std::string &line)
             auto result = mController.SetDipSwitchB(static_cast<uint8_t>(RequireNumber(RequireObjectField(params, "value"), "value")));
             return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
         }
+        if (method == "input.get_state")
+        {
+            auto result = mController.GetInputState();
+            return SerializeJson(WrapControllerResult(
+                id, result, JsonValue::Object({{"buttons", JsonValue::Number(result.value.mButtons)}})));
+        }
+        if (method == "input.set")
+        {
+            auto result = mController.SetInput(RequireString(RequireObjectField(params, "name"), "name"), true);
+            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+        }
+        if (method == "input.clear")
+        {
+            auto result = mController.ClearInput(RequireString(RequireObjectField(params, "name"), "name"));
+            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+        }
+        if (method == "input.press")
+        {
+            auto result = mController.PressInput(RequireString(RequireObjectField(params, "name"), "name"));
+            return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
+        }
 
         return SerializeJson(MakeErrorResponse(id, "unknown_method", "Unknown method: " + method));
     }
