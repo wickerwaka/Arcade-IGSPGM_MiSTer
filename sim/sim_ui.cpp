@@ -51,6 +51,11 @@ void UiInit(const char *title)
     ImguiInit(title);
 }
 
+void UiInitWindows()
+{
+    ImguiInitWindows();
+}
+
 bool UiBeginFrame()
 {
     return ImguiBeginFrame();
@@ -62,6 +67,7 @@ void UiEndFrame()
 }
 
 static bool gRefreshStateFiles = true;
+static void RefreshMemoryWindows();
 
 void UiGameChanged()
 {
@@ -70,6 +76,7 @@ void UiGameChanged()
 
     snprintf(title, sizeof(title), "IGS PGM - %s", name);
     ImguiSetTitle(title);
+    RefreshMemoryWindows();
     gRefreshStateFiles = true;
 }
 
@@ -303,6 +310,12 @@ class ROMWindow : public Window
 
     void Init()
     {
+        if (!gSimCore.mTop)
+        {
+            mTabs.clear();
+            return;
+        }
+
         mTabs.clear();
         mTabs.emplace_back("BIOS", gSimCore.Memory(MemoryRegion::BIOS_ROM));
         mTabs.emplace_back("T", gSimCore.Memory(MemoryRegion::TILE_ROM));
@@ -349,6 +362,12 @@ class RAMWindow : public Window
 
     void Init()
     {
+        if (!gSimCore.mTop)
+        {
+            mTabs.clear();
+            return;
+        }
+
         mTabs.clear();
         mTabs.emplace_back("Work", gSimCore.Memory(MemoryRegion::WORK_RAM));
         mTabs.emplace_back("Video", gSimCore.Memory(MemoryRegion::VIDEO_RAM));
@@ -374,3 +393,9 @@ class RAMWindow : public Window
 };
 
 RAMWindow gRamWindow;
+
+static void RefreshMemoryWindows()
+{
+    gRomWindow.Init();
+    gRamWindow.Init();
+}

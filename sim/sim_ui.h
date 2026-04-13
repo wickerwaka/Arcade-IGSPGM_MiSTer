@@ -3,6 +3,7 @@
 #define SIM_UI_H
 
 void UiInit(const char *title);
+void UiInitWindows();
 
 void UiGameChanged();
 

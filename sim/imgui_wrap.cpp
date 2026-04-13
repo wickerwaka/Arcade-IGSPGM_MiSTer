@@ -73,12 +73,17 @@ bool ImguiInit(const char *title)
     iniHandler.WriteAllFn = Window::SettingsHandlerWriteAll;
     ImGui::AddSettingsHandler(&iniHandler);
 
+    return true;
+}
+
+void ImguiInitWindows()
+{
+    Window::SortWindows();
+
     for (Window *window : Window::gWindows)
     {
         window->Init();
     }
-
-    return true;
 }
 
 bool ImguiBeginFrame()

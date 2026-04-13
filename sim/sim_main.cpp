@@ -87,6 +87,7 @@ int main(int argc, char **argv)
         gSimController.Reset(100);
     }
 
+    UiInitWindows();
     UiGameChanged();
 
     const Uint8 *keyboardState = SDL_GetKeyboardState(NULL);
