@@ -3,9 +3,9 @@
 #include <cctype>
 #include <cstdint>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <sstream>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -88,145 +88,227 @@ class JsonParser
   public:
     explicit JsonParser(const std::string &input) : mInput(input) {}
 
-    JsonValue Parse()
+    bool Parse(JsonValue &value, std::string &error)
     {
         SkipWhitespace();
-        JsonValue value = ParseValue();
+        if (!ParseValue(value))
+        {
+            error = mError;
+            return false;
+        }
         SkipWhitespace();
         if (mPos != mInput.size())
         {
-            throw std::runtime_error("Trailing data after JSON value");
+            error = "Trailing data after JSON value";
+            return false;
         }
-        return value;
+        return true;
     }
 
   private:
     const std::string &mInput;
     size_t mPos = 0;
+    std::string mError;
 
     void SkipWhitespace()
     {
         while (mPos < mInput.size() && std::isspace(static_cast<unsigned char>(mInput[mPos])))
-        {
             mPos++;
-        }
     }
 
-    char Peek() const
+    bool Peek(char &c)
     {
         if (mPos >= mInput.size())
         {
-            throw std::runtime_error("Unexpected end of input");
+            mError = "Unexpected end of input";
+            return false;
         }
-        return mInput[mPos];
+        c = mInput[mPos];
+        return true;
     }
 
-    char Consume()
+    bool Consume(char &c)
     {
-        char c = Peek();
+        if (!Peek(c))
+            return false;
         mPos++;
-        return c;
+        return true;
     }
 
-    void Expect(char expected)
+    bool Expect(char expected)
     {
-        char actual = Consume();
+        char actual;
+        if (!Consume(actual))
+            return false;
         if (actual != expected)
         {
-            throw std::runtime_error("Unexpected JSON token");
+            mError = "Unexpected JSON token";
+            return false;
         }
+        return true;
     }
 
-    JsonValue ParseValue()
+    bool ParseValue(JsonValue &value)
     {
         SkipWhitespace();
-        char c = Peek();
+        char c;
+        if (!Peek(c))
+            return false;
         if (c == '{')
-            return ParseObject();
+            return ParseObject(value);
         if (c == '[')
-            return ParseArray();
+            return ParseArray(value);
         if (c == '"')
-            return JsonValue::String(ParseString());
+        {
+            std::string stringValue;
+            if (!ParseString(stringValue))
+                return false;
+            value = JsonValue::String(stringValue);
+            return true;
+        }
         if (c == 't' || c == 'f')
-            return JsonValue::Bool(ParseBool());
+        {
+            bool boolValue = false;
+            if (!ParseBool(boolValue))
+                return false;
+            value = JsonValue::Bool(boolValue);
+            return true;
+        }
         if (c == 'n')
         {
-            ParseNull();
-            return JsonValue::Null();
+            if (!ParseNull())
+                return false;
+            value = JsonValue::Null();
+            return true;
         }
-        if (c == '-' || std::isdigit(static_cast<unsigned char>(c)))
-            return JsonValue::Number(ParseNumber());
-        throw std::runtime_error("Invalid JSON value");
+        if (std::isdigit(static_cast<unsigned char>(c)))
+        {
+            uint64_t numberValue = 0;
+            if (!ParseNumber(numberValue))
+                return false;
+            value = JsonValue::Number(numberValue);
+            return true;
+        }
+        if (c == '-')
+        {
+            mError = "Negative numbers are not supported in this protocol";
+            return false;
+        }
+
+        mError = "Invalid JSON value";
+        return false;
     }
 
-    JsonValue ParseObject()
+    bool ParseObject(JsonValue &value)
     {
-        Expect('{');
+        if (!Expect('{'))
+            return false;
         SkipWhitespace();
+
         std::map<std::string, JsonValue> object;
-        if (Peek() == '}')
+        char c;
+        if (!Peek(c))
+            return false;
+        if (c == '}')
         {
-            Consume();
-            return JsonValue::Object(std::move(object));
+            if (!Consume(c))
+                return false;
+            value = JsonValue::Object(std::move(object));
+            return true;
         }
 
         while (true)
         {
+            std::string key;
+            if (!ParseString(key))
+                return false;
             SkipWhitespace();
-            std::string key = ParseString();
+            if (!Expect(':'))
+                return false;
             SkipWhitespace();
-            Expect(':');
+
+            JsonValue childValue;
+            if (!ParseValue(childValue))
+                return false;
+            object[key] = childValue;
+
             SkipWhitespace();
-            object[key] = ParseValue();
-            SkipWhitespace();
-            char c = Consume();
+            if (!Consume(c))
+                return false;
             if (c == '}')
                 break;
             if (c != ',')
-                throw std::runtime_error("Expected ',' or '}' in object");
+            {
+                mError = "Expected ',' or '}' in object";
+                return false;
+            }
+            SkipWhitespace();
         }
 
-        return JsonValue::Object(std::move(object));
+        value = JsonValue::Object(std::move(object));
+        return true;
     }
 
-    JsonValue ParseArray()
+    bool ParseArray(JsonValue &value)
     {
-        Expect('[');
+        if (!Expect('['))
+            return false;
         SkipWhitespace();
+
         std::vector<JsonValue> array;
-        if (Peek() == ']')
+        char c;
+        if (!Peek(c))
+            return false;
+        if (c == ']')
         {
-            Consume();
-            return JsonValue::Array(std::move(array));
+            if (!Consume(c))
+                return false;
+            value = JsonValue::Array(std::move(array));
+            return true;
         }
 
         while (true)
         {
-            array.push_back(ParseValue());
+            JsonValue childValue;
+            if (!ParseValue(childValue))
+                return false;
+            array.push_back(childValue);
+
             SkipWhitespace();
-            char c = Consume();
+            if (!Consume(c))
+                return false;
             if (c == ']')
                 break;
             if (c != ',')
-                throw std::runtime_error("Expected ',' or ']' in array");
+            {
+                mError = "Expected ',' or ']' in array";
+                return false;
+            }
             SkipWhitespace();
         }
 
-        return JsonValue::Array(std::move(array));
+        value = JsonValue::Array(std::move(array));
+        return true;
     }
 
-    std::string ParseString()
+    bool ParseString(std::string &result)
     {
-        Expect('"');
-        std::string result;
+        if (!Expect('"'))
+            return false;
+        result.clear();
+
         while (true)
         {
-            char c = Consume();
+            char c;
+            if (!Consume(c))
+                return false;
             if (c == '"')
                 break;
             if (c == '\\')
             {
-                char escaped = Consume();
+                char escaped;
+                if (!Consume(escaped))
+                    return false;
                 switch (escaped)
                 {
                 case '"': result.push_back('"'); break;
@@ -238,7 +320,8 @@ class JsonParser
                 case 'r': result.push_back('\r'); break;
                 case 't': result.push_back('\t'); break;
                 default:
-                    throw std::runtime_error("Unsupported string escape");
+                    mError = "Unsupported string escape";
+                    return false;
                 }
             }
             else
@@ -246,45 +329,65 @@ class JsonParser
                 result.push_back(c);
             }
         }
-        return result;
+
+        return true;
     }
 
-    bool ParseBool()
+    bool ParseBool(bool &value)
     {
         if (mInput.compare(mPos, 4, "true") == 0)
         {
             mPos += 4;
+            value = true;
             return true;
         }
         if (mInput.compare(mPos, 5, "false") == 0)
         {
             mPos += 5;
-            return false;
+            value = false;
+            return true;
         }
-        throw std::runtime_error("Invalid boolean value");
+        mError = "Invalid boolean value";
+        return false;
     }
 
-    void ParseNull()
+    bool ParseNull()
     {
         if (mInput.compare(mPos, 4, "null") != 0)
         {
-            throw std::runtime_error("Invalid null value");
+            mError = "Invalid null value";
+            return false;
         }
         mPos += 4;
+        return true;
     }
 
-    uint64_t ParseNumber()
+    bool ParseNumber(uint64_t &value)
     {
         size_t start = mPos;
-        if (mInput[mPos] == '-')
-            mPos++;
         while (mPos < mInput.size() && std::isdigit(static_cast<unsigned char>(mInput[mPos])))
             mPos++;
-        std::string token = mInput.substr(start, mPos - start);
-        long long value = std::stoll(token);
-        if (value < 0)
-            throw std::runtime_error("Negative numbers are not supported in this protocol");
-        return static_cast<uint64_t>(value);
+
+        if (start == mPos)
+        {
+            mError = "Invalid number";
+            return false;
+        }
+
+        uint64_t parsed = 0;
+        for (size_t i = start; i < mPos; i++)
+        {
+            uint64_t digit = static_cast<uint64_t>(mInput[i] - '0');
+            if (parsed > (std::numeric_limits<uint64_t>::max() - digit) / 10)
+            {
+                mError = "Number out of range";
+                return false;
+            }
+            parsed = parsed * 10 + digit;
+        }
+
+        value = parsed;
+        return true;
     }
 };
 
@@ -302,9 +405,7 @@ std::string EscapeJsonString(const std::string &value)
         case '\n': out << "\\n"; break;
         case '\r': out << "\\r"; break;
         case '\t': out << "\\t"; break;
-        default:
-            out << c;
-            break;
+        default: out << c; break;
         }
     }
     return out.str();
@@ -355,35 +456,37 @@ std::string SerializeJson(const JsonValue &value)
     return out.str();
 }
 
-uint64_t RequireNumber(const JsonValue &value, const std::string &name)
+bool RequireNumber(const JsonValue &value, const std::string &name, uint64_t &out, std::string &error)
 {
     if (!value.IsNumber())
-        throw std::runtime_error("Expected numeric field: " + name);
-    return value.mNumber;
+    {
+        error = "Expected numeric field: " + name;
+        return false;
+    }
+    out = value.mNumber;
+    return true;
 }
 
-bool RequireBool(const JsonValue &value, const std::string &name)
+bool RequireBool(const JsonValue &value, const std::string &name, bool &out, std::string &error)
 {
     if (!value.IsBool())
-        throw std::runtime_error("Expected boolean field: " + name);
-    return value.mBool;
+    {
+        error = "Expected boolean field: " + name;
+        return false;
+    }
+    out = value.mBool;
+    return true;
 }
 
-std::string RequireString(const JsonValue &value, const std::string &name)
+bool RequireString(const JsonValue &value, const std::string &name, std::string &out, std::string &error)
 {
     if (!value.IsString())
-        throw std::runtime_error("Expected string field: " + name);
-    return value.mString;
-}
-
-const JsonValue &RequireObjectField(const JsonValue &object, const std::string &name)
-{
-    if (!object.IsObject())
-        throw std::runtime_error("Expected object");
-    auto it = object.mObject.find(name);
-    if (it == object.mObject.end())
-        throw std::runtime_error("Missing field: " + name);
-    return it->second;
+    {
+        error = "Expected string field: " + name;
+        return false;
+    }
+    out = value.mString;
+    return true;
 }
 
 const JsonValue *FindObjectField(const JsonValue &object, const std::string &name)
@@ -396,23 +499,40 @@ const JsonValue *FindObjectField(const JsonValue &object, const std::string &nam
     return &it->second;
 }
 
+bool RequireObjectField(const JsonValue &object, const std::string &name, const JsonValue *&out, std::string &error)
+{
+    if (!object.IsObject())
+    {
+        error = "Expected object";
+        return false;
+    }
+    out = FindObjectField(object, name);
+    if (!out)
+    {
+        error = "Missing field: " + name;
+        return false;
+    }
+    return true;
+}
+
 std::string BytesToHex(const std::vector<uint8_t> &data)
 {
     std::ostringstream out;
     out << std::hex << std::setfill('0');
     for (uint8_t byte : data)
-    {
         out << std::setw(2) << static_cast<int>(byte);
-    }
     return out.str();
 }
 
-std::vector<uint8_t> HexToBytes(const std::string &hex)
+bool HexToBytes(const std::string &hex, std::vector<uint8_t> &data, std::string &error)
 {
     if ((hex.size() & 1U) != 0)
-        throw std::runtime_error("Hex string must have even length");
+    {
+        error = "Hex string must have even length";
+        return false;
+    }
 
-    std::vector<uint8_t> data;
+    data.clear();
     data.reserve(hex.size() / 2);
     for (size_t i = 0; i < hex.size(); i += 2)
     {
@@ -421,34 +541,35 @@ std::vector<uint8_t> HexToBytes(const std::string &hex)
         ss << std::hex << hex.substr(i, 2);
         ss >> byte;
         if (ss.fail())
-            throw std::runtime_error("Invalid hex data");
+        {
+            error = "Invalid hex data";
+            return false;
+        }
         data.push_back(static_cast<uint8_t>(byte));
     }
-    return data;
+    return true;
 }
 
 std::string RunStopReasonString(RunStopReason reason)
 {
     switch (reason)
     {
-    case RunStopReason::COMPLETED:
-        return "completed";
-    case RunStopReason::CONDITION_MET:
-        return "condition_met";
-    case RunStopReason::WATCHPOINT_HIT:
-        return "watchpoint_hit";
-    case RunStopReason::TIMEOUT:
-        return "timeout";
-    case RunStopReason::ERROR:
-        return "error";
+    case RunStopReason::COMPLETED: return "completed";
+    case RunStopReason::CONDITION_MET: return "condition_met";
+    case RunStopReason::WATCHPOINT_HIT: return "watchpoint_hit";
+    case RunStopReason::TIMEOUT: return "timeout";
+    case RunStopReason::ERROR: return "error";
     }
     return "error";
 }
 
-Condition ParseCondition(const JsonValue &json)
+bool ParseCondition(const JsonValue &json, Condition &condition, std::string &error)
 {
-    Condition condition;
-    std::string type = RequireString(RequireObjectField(json, "type"), "type");
+    const JsonValue *typeField = nullptr;
+    std::string type;
+    if (!RequireObjectField(json, "type", typeField, error) || !RequireString(*typeField, "type", type, error))
+        return false;
+
     if (type == "signal_equals")
         condition.mType = Condition::Type::SIGNAL_EQUALS;
     else if (type == "signal_not_equals")
@@ -474,39 +595,58 @@ Condition ParseCondition(const JsonValue &json)
     else if (type == "not")
         condition.mType = Condition::Type::NOT;
     else
-        throw std::runtime_error("Unknown condition type: " + type);
+    {
+        error = "Unknown condition type: " + type;
+        return false;
+    }
 
     if (const JsonValue *signal = FindObjectField(json, "signal"))
-        condition.mSignal = RequireString(*signal, "signal");
+    {
+        if (!RequireString(*signal, "signal", condition.mSignal, error))
+            return false;
+    }
     if (const JsonValue *value = FindObjectField(json, "value"))
-        condition.mValue = RequireNumber(*value, "value");
+    {
+        if (!RequireNumber(*value, "value", condition.mValue, error))
+            return false;
+    }
     if (const JsonValue *value2 = FindObjectField(json, "value2"))
-        condition.mValue2 = RequireNumber(*value2, "value2");
+    {
+        if (!RequireNumber(*value2, "value2", condition.mValue2, error))
+            return false;
+    }
     if (const JsonValue *start = FindObjectField(json, "start"))
-        condition.mValue = RequireNumber(*start, "start");
+    {
+        if (!RequireNumber(*start, "start", condition.mValue, error))
+            return false;
+    }
     if (const JsonValue *end = FindObjectField(json, "end"))
-        condition.mValue2 = RequireNumber(*end, "end");
-
+    {
+        if (!RequireNumber(*end, "end", condition.mValue2, error))
+            return false;
+    }
     if (const JsonValue *children = FindObjectField(json, "children"))
     {
         if (!children->IsArray())
-            throw std::runtime_error("Condition children must be an array");
+        {
+            error = "Condition children must be an array";
+            return false;
+        }
         for (const auto &child : children->mArray)
         {
-            condition.mChildren.push_back(ParseCondition(child));
+            Condition parsedChild;
+            if (!ParseCondition(child, parsedChild, error))
+                return false;
+            condition.mChildren.push_back(parsedChild);
         }
     }
 
-    return condition;
+    return true;
 }
 
 JsonValue MakeSuccessResponse(uint64_t id, const JsonValue &result)
 {
-    return JsonValue::Object({
-        {"id", JsonValue::Number(id)},
-        {"ok", JsonValue::Bool(true)},
-        {"result", result},
-    });
+    return JsonValue::Object({{"id", JsonValue::Number(id)}, {"ok", JsonValue::Bool(true)}, {"result", result}});
 }
 
 JsonValue MakeErrorResponse(uint64_t id, const std::string &code, const std::string &message)
@@ -514,10 +654,7 @@ JsonValue MakeErrorResponse(uint64_t id, const std::string &code, const std::str
     return JsonValue::Object({
         {"id", JsonValue::Number(id)},
         {"ok", JsonValue::Bool(false)},
-        {"error", JsonValue::Object({
-            {"code", JsonValue::String(code)},
-            {"message", JsonValue::String(message)},
-        })},
+        {"error", JsonValue::Object({{"code", JsonValue::String(code)}, {"message", JsonValue::String(message)}})},
     });
 }
 
@@ -573,209 +710,276 @@ SimProtocol::SimProtocol(SimController &controller) : mController(controller)
 std::string SimProtocol::HandleLine(const std::string &line)
 {
     uint64_t id = 0;
+    std::string error;
+    JsonParser parser(line);
+    JsonValue request;
+    if (!parser.Parse(request, error))
+        return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+    if (!request.IsObject())
+        return SerializeJson(MakeErrorResponse(id, "bad_request", "Request must be a JSON object"));
 
-    try
+    const JsonValue *field = nullptr;
+    if (!RequireObjectField(request, "id", field, error) || !RequireNumber(*field, "id", id, error))
+        return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+
+    std::string method;
+    if (!RequireObjectField(request, "method", field, error) || !RequireString(*field, "method", method, error))
+        return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+
+    JsonValue params = JsonValue::Object({});
+    if (const JsonValue *paramsField = FindObjectField(request, "params"))
+        params = *paramsField;
+
+    if (method == "sim.initialize")
     {
-        JsonParser parser(line);
-        JsonValue request = parser.Parse();
-        if (!request.IsObject())
-            throw std::runtime_error("Request must be a JSON object");
-
-        id = RequireNumber(RequireObjectField(request, "id"), "id");
-        std::string method = RequireString(RequireObjectField(request, "method"), "method");
-        JsonValue params = JsonValue::Object({});
-        if (const JsonValue *paramsField = FindObjectField(request, "params"))
-            params = *paramsField;
-
-        if (method == "sim.initialize")
+        bool headless = true;
+        if (const JsonValue *headlessField = FindObjectField(params, "headless"))
         {
-            bool headless = true;
-            if (const JsonValue *headlessField = FindObjectField(params, "headless"))
-                headless = RequireBool(*headlessField, "headless");
-            auto result = mController.Initialize(headless);
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+            if (!RequireBool(*headlessField, "headless", headless, error))
+                return SerializeJson(MakeErrorResponse(id, "bad_request", error));
         }
-        if (method == "sim.shutdown")
-        {
-            auto result = mController.Shutdown();
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "sim.status")
-        {
-            auto result = mController.GetStatus();
-            return SerializeJson(WrapControllerResult(id, result, StatusToJson(result.value)));
-        }
-        if (method == "sim.load_game")
-        {
-            auto result = mController.LoadGame(RequireString(RequireObjectField(params, "name"), "name"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "sim.load_mra")
-        {
-            auto result = mController.LoadMra(RequireString(RequireObjectField(params, "path"), "path"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "sim.reset")
-        {
-            auto result = mController.Reset(RequireNumber(RequireObjectField(params, "cycles"), "cycles"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "sim.run_cycles")
-        {
-            auto result = mController.RunCycles(RequireNumber(RequireObjectField(params, "count"), "count"));
-            return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
-        }
-        if (method == "sim.run_frames")
-        {
-            auto result = mController.RunFrames(RequireNumber(RequireObjectField(params, "count"), "count"));
-            return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
-        }
-        if (method == "sim.run_until")
-        {
-            RunUntilRequest requestValue;
-            requestValue.mCondition = ParseCondition(RequireObjectField(params, "condition"));
-            if (const JsonValue *timeoutField = FindObjectField(params, "timeout_cycles"))
-                requestValue.mTimeoutCycles = RequireNumber(*timeoutField, "timeout_cycles");
-            auto result = mController.RunUntil(requestValue);
-            return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
-        }
-        if (method == "cpu.get_state")
-        {
-            auto result = mController.GetCpuState();
-            return SerializeJson(WrapControllerResult(id, result, CpuStateToJson(result.value)));
-        }
-        if (method == "memory.read")
-        {
-            auto result = mController.ReadMemory(
-                RequireString(RequireObjectField(params, "region"), "region"),
-                static_cast<uint32_t>(RequireNumber(RequireObjectField(params, "address"), "address")),
-                static_cast<uint32_t>(RequireNumber(RequireObjectField(params, "size"), "size")));
-            JsonValue payload = JsonValue::Object({
-                {"region", JsonValue::String(result.value.mRegion)},
-                {"address", JsonValue::Number(result.value.mAddress)},
-                {"data_hex", JsonValue::String(BytesToHex(result.value.mData))},
-            });
-            return SerializeJson(WrapControllerResult(id, result, payload));
-        }
-        if (method == "memory.write")
-        {
-            auto result = mController.WriteMemory(
-                RequireString(RequireObjectField(params, "region"), "region"),
-                static_cast<uint32_t>(RequireNumber(RequireObjectField(params, "address"), "address")),
-                HexToBytes(RequireString(RequireObjectField(params, "data_hex"), "data_hex")));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "memory.list_regions")
-        {
-            auto result = mController.ListRegions();
-            std::vector<JsonValue> regions;
-            for (const auto &region : result.value)
-                regions.push_back(JsonValue::String(region));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Array(std::move(regions))));
-        }
-        if (method == "signal.read")
-        {
-            auto result = mController.ReadSignal(RequireString(RequireObjectField(params, "name"), "name"));
-            if (!result.ok)
-                return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
-            JsonValue payload = JsonValue::Object({
-                {"name", JsonValue::String(result.value.mSignal)},
-                {"value", JsonValue::Number(result.value.mValue)},
-                {"width", JsonValue::Number(result.value.mWidth)},
-                {"value_hex", JsonValue::String(result.value.mValueHex)},
-            });
-            return SerializeJson(WrapControllerResult(id, result, payload));
-        }
-        if (method == "signal.list")
-        {
-            auto result = mController.ListSignals();
-            if (!result.ok)
-                return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
-
-            std::vector<JsonValue> signals;
-            for (const auto &signal : result.value.mSignals)
-            {
-                signals.push_back(JsonValue::Object({
-                    {"name", JsonValue::String(signal.mName)},
-                    {"width", JsonValue::Number(signal.mWidth)},
-                    {"kind", JsonValue::String(signal.mKind)},
-                    {"source", JsonValue::String(signal.mSource)},
-                }));
-            }
-            return SerializeJson(MakeSuccessResponse(id, JsonValue::Object({{"signals", JsonValue::Array(std::move(signals))}})));
-        }
-        if (method == "state.list")
-        {
-            auto result = mController.ListStates();
-            std::vector<JsonValue> states;
-            for (const auto &state : result.value.mStates)
-                states.push_back(JsonValue::String(state));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"states", JsonValue::Array(std::move(states))}})));
-        }
-        if (method == "state.save")
-        {
-            auto result = mController.SaveState(RequireString(RequireObjectField(params, "filename"), "filename"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "state.load")
-        {
-            auto result = mController.LoadState(RequireString(RequireObjectField(params, "filename"), "filename"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "trace.start")
-        {
-            int depth = 1;
-            if (const JsonValue *depthField = FindObjectField(params, "depth"))
-                depth = static_cast<int>(RequireNumber(*depthField, "depth"));
-            auto result = mController.StartTrace(RequireString(RequireObjectField(params, "filename"), "filename"), depth);
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "trace.stop")
-        {
-            auto result = mController.StopTrace();
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "video.screenshot")
-        {
-            auto result = mController.SaveScreenshot(RequireString(RequireObjectField(params, "path"), "path"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"path", JsonValue::String(result.value.mPath)}})));
-        }
-        if (method == "input.set_dipswitch_a")
-        {
-            auto result = mController.SetDipSwitchA(static_cast<uint8_t>(RequireNumber(RequireObjectField(params, "value"), "value")));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "input.set_dipswitch_b")
-        {
-            auto result = mController.SetDipSwitchB(static_cast<uint8_t>(RequireNumber(RequireObjectField(params, "value"), "value")));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "input.get_state")
-        {
-            auto result = mController.GetInputState();
-            return SerializeJson(WrapControllerResult(
-                id, result, JsonValue::Object({{"buttons", JsonValue::Number(result.value.mButtons)}})));
-        }
-        if (method == "input.set")
-        {
-            auto result = mController.SetInput(RequireString(RequireObjectField(params, "name"), "name"), true);
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "input.clear")
-        {
-            auto result = mController.ClearInput(RequireString(RequireObjectField(params, "name"), "name"));
-            return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
-        }
-        if (method == "input.press")
-        {
-            auto result = mController.PressInput(RequireString(RequireObjectField(params, "name"), "name"));
-            return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
-        }
-
-        return SerializeJson(MakeErrorResponse(id, "unknown_method", "Unknown method: " + method));
+        auto result = mController.Initialize(headless);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
     }
-    catch (const std::exception &e)
+    if (method == "sim.shutdown")
     {
-        return SerializeJson(MakeErrorResponse(id, "bad_request", e.what()));
+        auto result = mController.Shutdown();
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
     }
+    if (method == "sim.status")
+    {
+        auto result = mController.GetStatus();
+        return SerializeJson(WrapControllerResult(id, result, StatusToJson(result.value)));
+    }
+    if (method == "sim.load_game")
+    {
+        std::string name;
+        if (!RequireObjectField(params, "name", field, error) || !RequireString(*field, "name", name, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.LoadGame(name);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "sim.load_mra")
+    {
+        std::string path;
+        if (!RequireObjectField(params, "path", field, error) || !RequireString(*field, "path", path, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.LoadMra(path);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "sim.reset")
+    {
+        uint64_t cycles = 0;
+        if (!RequireObjectField(params, "cycles", field, error) || !RequireNumber(*field, "cycles", cycles, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.Reset(cycles);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "sim.run_cycles")
+    {
+        uint64_t count = 0;
+        if (!RequireObjectField(params, "count", field, error) || !RequireNumber(*field, "count", count, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.RunCycles(count);
+        return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
+    }
+    if (method == "sim.run_frames")
+    {
+        uint64_t count = 0;
+        if (!RequireObjectField(params, "count", field, error) || !RequireNumber(*field, "count", count, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.RunFrames(count);
+        return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
+    }
+    if (method == "sim.run_until")
+    {
+        RunUntilRequest requestValue;
+        if (!RequireObjectField(params, "condition", field, error) || !ParseCondition(*field, requestValue.mCondition, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        if (const JsonValue *timeoutField = FindObjectField(params, "timeout_cycles"))
+        {
+            if (!RequireNumber(*timeoutField, "timeout_cycles", requestValue.mTimeoutCycles, error))
+                return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        }
+        auto result = mController.RunUntil(requestValue);
+        return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
+    }
+    if (method == "cpu.get_state")
+    {
+        auto result = mController.GetCpuState();
+        return SerializeJson(WrapControllerResult(id, result, CpuStateToJson(result.value)));
+    }
+    if (method == "memory.read")
+    {
+        std::string region;
+        uint64_t address = 0;
+        uint64_t size = 0;
+        if (!RequireObjectField(params, "region", field, error) || !RequireString(*field, "region", region, error)
+            || !RequireObjectField(params, "address", field, error) || !RequireNumber(*field, "address", address, error)
+            || !RequireObjectField(params, "size", field, error) || !RequireNumber(*field, "size", size, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.ReadMemory(region, static_cast<uint32_t>(address), static_cast<uint32_t>(size));
+        JsonValue payload = JsonValue::Object({
+            {"region", JsonValue::String(result.value.mRegion)},
+            {"address", JsonValue::Number(result.value.mAddress)},
+            {"data_hex", JsonValue::String(BytesToHex(result.value.mData))},
+        });
+        return SerializeJson(WrapControllerResult(id, result, payload));
+    }
+    if (method == "memory.write")
+    {
+        std::string region;
+        std::string dataHex;
+        uint64_t address = 0;
+        if (!RequireObjectField(params, "region", field, error) || !RequireString(*field, "region", region, error)
+            || !RequireObjectField(params, "address", field, error) || !RequireNumber(*field, "address", address, error)
+            || !RequireObjectField(params, "data_hex", field, error) || !RequireString(*field, "data_hex", dataHex, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        std::vector<uint8_t> data;
+        if (!HexToBytes(dataHex, data, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.WriteMemory(region, static_cast<uint32_t>(address), data);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "memory.list_regions")
+    {
+        auto result = mController.ListRegions();
+        std::vector<JsonValue> regions;
+        for (const auto &region : result.value)
+            regions.push_back(JsonValue::String(region));
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Array(std::move(regions))));
+    }
+    if (method == "signal.read")
+    {
+        std::string name;
+        if (!RequireObjectField(params, "name", field, error) || !RequireString(*field, "name", name, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.ReadSignal(name);
+        if (!result.ok)
+            return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
+        JsonValue payload = JsonValue::Object({
+            {"name", JsonValue::String(result.value.mSignal)},
+            {"value", JsonValue::Number(result.value.mValue)},
+            {"width", JsonValue::Number(result.value.mWidth)},
+            {"value_hex", JsonValue::String(result.value.mValueHex)},
+        });
+        return SerializeJson(WrapControllerResult(id, result, payload));
+    }
+    if (method == "signal.list")
+    {
+        auto result = mController.ListSignals();
+        if (!result.ok)
+            return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
+        std::vector<JsonValue> signals;
+        for (const auto &signal : result.value.mSignals)
+        {
+            signals.push_back(JsonValue::Object({
+                {"name", JsonValue::String(signal.mName)},
+                {"width", JsonValue::Number(signal.mWidth)},
+                {"kind", JsonValue::String(signal.mKind)},
+                {"source", JsonValue::String(signal.mSource)},
+            }));
+        }
+        return SerializeJson(MakeSuccessResponse(id, JsonValue::Object({{"signals", JsonValue::Array(std::move(signals))}})));
+    }
+    if (method == "state.list")
+    {
+        auto result = mController.ListStates();
+        std::vector<JsonValue> states;
+        for (const auto &state : result.value.mStates)
+            states.push_back(JsonValue::String(state));
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"states", JsonValue::Array(std::move(states))}})));
+    }
+    if (method == "state.save")
+    {
+        std::string filename;
+        if (!RequireObjectField(params, "filename", field, error) || !RequireString(*field, "filename", filename, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.SaveState(filename);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "state.load")
+    {
+        std::string filename;
+        if (!RequireObjectField(params, "filename", field, error) || !RequireString(*field, "filename", filename, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.LoadState(filename);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "trace.start")
+    {
+        std::string filename;
+        int depth = 1;
+        if (!RequireObjectField(params, "filename", field, error) || !RequireString(*field, "filename", filename, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        if (const JsonValue *depthField = FindObjectField(params, "depth"))
+        {
+            uint64_t depthValue = 0;
+            if (!RequireNumber(*depthField, "depth", depthValue, error))
+                return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+            depth = static_cast<int>(depthValue);
+        }
+        auto result = mController.StartTrace(filename, depth);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "trace.stop")
+    {
+        auto result = mController.StopTrace();
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "video.screenshot")
+    {
+        std::string path;
+        if (!RequireObjectField(params, "path", field, error) || !RequireString(*field, "path", path, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.SaveScreenshot(path);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"path", JsonValue::String(result.value.mPath)}})));
+    }
+    if (method == "input.set_dipswitch_a")
+    {
+        uint64_t value = 0;
+        if (!RequireObjectField(params, "value", field, error) || !RequireNumber(*field, "value", value, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.SetDipSwitchA(static_cast<uint8_t>(value));
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "input.set_dipswitch_b")
+    {
+        uint64_t value = 0;
+        if (!RequireObjectField(params, "value", field, error) || !RequireNumber(*field, "value", value, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.SetDipSwitchB(static_cast<uint8_t>(value));
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "input.get_state")
+    {
+        auto result = mController.GetInputState();
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"buttons", JsonValue::Number(result.value.mButtons)}})));
+    }
+    if (method == "input.set")
+    {
+        std::string name;
+        if (!RequireObjectField(params, "name", field, error) || !RequireString(*field, "name", name, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.SetInput(name, true);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "input.clear")
+    {
+        std::string name;
+        if (!RequireObjectField(params, "name", field, error) || !RequireString(*field, "name", name, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.ClearInput(name);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "input.press")
+    {
+        std::string name;
+        if (!RequireObjectField(params, "name", field, error) || !RequireString(*field, "name", name, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.PressInput(name);
+        return SerializeJson(WrapControllerResult(id, result, RunResultToJson(result.value)));
+    }
+
+    return SerializeJson(MakeErrorResponse(id, "unknown_method", "Unknown method: " + method));
 }
