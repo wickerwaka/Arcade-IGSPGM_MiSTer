@@ -41,10 +41,12 @@ bool SimState::SaveState(const char *filename)
 {
     mTop->ss_index = 0;
     mTop->ss_do_save = 1;
-    gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0);
+    if (!gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0).Succeeded())
+        return false;
 
     mTop->ss_do_save = 0;
-    gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0);
+    if (!gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0).Succeeded())
+        return false;
 
     std::string fullPath = GetStatePath(filename);
     mMemory->SaveData(fullPath.c_str(), mOffset, mSize);
@@ -60,10 +62,12 @@ bool SimState::RestoreState(const char *filename)
 
     mTop->ss_index = 0;
     mTop->ss_do_restore = 1;
-    gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0);
+    if (!gSimCore.TickUntil([&] { return mTop->ss_state_out != 0; }, 0).Succeeded())
+        return false;
 
     mTop->ss_do_restore = 0;
-    gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0);
+    if (!gSimCore.TickUntil([&] { return mTop->ss_state_out == 0; }, 0).Succeeded())
+        return false;
 
     return true;
 }

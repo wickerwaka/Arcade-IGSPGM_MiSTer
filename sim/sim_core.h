@@ -35,6 +35,25 @@ enum class MemoryRegion : int
     COUNT
 };
 
+enum class TickStopReason
+{
+    COMPLETED,
+    WATCHPOINT_HIT,
+    CONDITION_MET,
+    TIMEOUT
+};
+
+struct TickResult
+{
+    TickStopReason mReason;
+    int mTicksExecuted;
+
+    bool Succeeded() const
+    {
+        return mReason == TickStopReason::COMPLETED || mReason == TickStopReason::CONDITION_MET;
+    }
+};
+
 class SimCore
 {
   public:
@@ -66,8 +85,8 @@ class SimCore
 
     // Main simulation methods
     void Init();
-    void Tick(int count = 1);
-    bool TickUntil(std::function<bool()> until, int limit);
+    TickResult Tick(int count = 1);
+    TickResult TickUntil(std::function<bool()> until, int limit);
     void Shutdown();
 
     // Trace control methods
@@ -103,6 +122,8 @@ class SimCore
     std::unique_ptr<VerilatedFstC> mTfp;
 
     std::unique_ptr<MemoryInterface> mMemoryRegion[(int)MemoryRegion::COUNT];
+
+    TickResult TickOneCycle();
 
     // IOCTL helper methods
     void WaitForIOCTLReady();

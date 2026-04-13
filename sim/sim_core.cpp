@@ -72,51 +72,77 @@ void SimCore::Init()
     mCPU->MapMemory(0x00000000, 0xfe000000, Memory(MemoryRegion::BIOS_ROM));
 }
 
-void SimCore::Tick(int count)
+TickResult SimCore::TickOneCycle()
 {
-    for (int i = 0; i < count; i++)
+    mTotalTicks++;
+
+    mSDRAM->UpdateChannel64(0, 1, mTop->sdr_addr, mTop->sdr_req, mTop->sdr_rw, mTop->sdr_be, mTop->sdr_data, &mTop->sdr_q, &mTop->sdr_ack);
+    mVideo->Clock(mTop->ce_pixel != 0, mTop->hblank != 0, mTop->vblank != 0, mTop->red, mTop->green, mTop->blue);
+
+    mDDRMemory->Clock(mTop->ddr_addr, mTop->ddr_wdata, mTop->ddr_rdata, mTop->ddr_read, mTop->ddr_write, mTop->ddr_busy,
+                      mTop->ddr_read_complete, mTop->ddr_burstcnt, mTop->ddr_byteenable);
+
+    mContextp->timeInc(1);
+    mTop->clk = 0;
+
+    mTop->eval();
+    if (mTfp)
+        mTfp->dump(mContextp->time());
+
+    mContextp->timeInc(1);
+    mTop->clk = 1;
+
+    mTop->eval();
+    if (mTfp)
+        mTfp->dump(mContextp->time());
+
+    if (mSimulationWpSet && mTop->rootp->PGM_SIGNAL(cpu_word_addr) == mSimulationWpAddr)
     {
-        mTotalTicks++;
-
-        mSDRAM->UpdateChannel64(0, 1, mTop->sdr_addr, mTop->sdr_req, mTop->sdr_rw, mTop->sdr_be, mTop->sdr_data, &mTop->sdr_q, &mTop->sdr_ack);
-        mVideo->Clock(mTop->ce_pixel != 0, mTop->hblank != 0, mTop->vblank != 0, mTop->red, mTop->green, mTop->blue);
-
-        mDDRMemory->Clock(mTop->ddr_addr, mTop->ddr_wdata, mTop->ddr_rdata, mTop->ddr_read, mTop->ddr_write, mTop->ddr_busy,
-                          mTop->ddr_read_complete, mTop->ddr_burstcnt, mTop->ddr_byteenable);
-
-        mContextp->timeInc(1);
-        mTop->clk = 0;
-
-        mTop->eval();
-        if (mTfp)
-            mTfp->dump(mContextp->time());
-
-        mContextp->timeInc(1);
-        mTop->clk = 1;
-
-        mTop->eval();
-        if (mTfp)
-            mTfp->dump(mContextp->time());
-
-        if (mSimulationWpSet && mTop->rootp->PGM_SIGNAL(cpu_word_addr) == mSimulationWpAddr)
-        {
-            mSimulationRun = false;
-            mSimulationStep = false;
-            return;
-        }
+        mSimulationRun = false;
+        mSimulationStep = false;
+        return {TickStopReason::WATCHPOINT_HIT, 1};
     }
+
+    return {TickStopReason::COMPLETED, 1};
 }
 
-bool SimCore::TickUntil(std::function<bool()> until, int limit) // NOLINT(readability-identifier-naming)
+TickResult SimCore::Tick(int count)
+{
+    TickResult result{TickStopReason::COMPLETED, 0};
+
+    for (int i = 0; i < count; i++)
+    {
+        TickResult tickResult = TickOneCycle();
+        result.mTicksExecuted += tickResult.mTicksExecuted;
+        if (tickResult.mReason != TickStopReason::COMPLETED)
+        {
+            result.mReason = tickResult.mReason;
+            return result;
+        }
+    }
+
+    return result;
+}
+
+TickResult SimCore::TickUntil(std::function<bool()> until, int limit)
 {
     int count = 0;
     while (!until())
     {
         count++;
-        if (count == limit) return false;
-        Tick(1);
+        if (count == limit)
+        {
+            return {TickStopReason::TIMEOUT, count - 1};
+        }
+
+        TickResult tickResult = Tick(1);
+        if (tickResult.mReason != TickStopReason::COMPLETED)
+        {
+            tickResult.mTicksExecuted = count;
+            return tickResult;
+        }
     }
-    return true;
+    return {TickStopReason::CONDITION_MET, count};
 }
 
 void SimCore::Shutdown()
@@ -245,7 +271,10 @@ bool SimCore::SendIOCTLDataDDR(uint8_t index, uint32_t addr, const std::vector<u
     mTop->ioctl_download = 0;
     Tick(2);
 
-    TickUntil([&] { return mTop->rootp->sim_top__DOT__rom_load_busy == 0; }, 0);
+    if (!TickUntil([&] { return mTop->rootp->sim_top__DOT__rom_load_busy == 0; }, 0).Succeeded())
+    {
+        return false;
+    }
 
     mTop->reset = 0;
 

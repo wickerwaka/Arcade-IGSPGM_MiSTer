@@ -19,7 +19,14 @@ void serial_audio_capture_init(const serial_audio_capture_config_t *config, ster
 void serial_audio_capture_enable(void);
 void serial_audio_capture_task(void);
 bool serial_audio_capture_is_running(void);
+uint32_t serial_audio_capture_get_processed_dma_blocks(void);
+uint32_t serial_audio_capture_get_ready_mask(void);
 uint32_t serial_audio_capture_get_dropped_dma_blocks(void);
 uint32_t serial_audio_capture_get_dropped_audio_frames(void);
+uint32_t serial_audio_capture_get_channel_word_count(void);
+uint32_t serial_audio_capture_get_stereo_frame_count(void);
+uint32_t serial_audio_capture_get_nonzero_sample_count(void);
+int16_t serial_audio_capture_get_last_left_sample(void);
+int16_t serial_audio_capture_get_last_right_sample(void);
 
 #endif

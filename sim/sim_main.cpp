@@ -132,8 +132,10 @@ int main(int argc, char **argv)
                     printf("Running %llu frames...\n", cmd.mCount);
                 for (uint64_t i = 0; i < cmd.mCount; i++)
                 {
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; }, 10000000);
-                    gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; }, 10000000);
+                    if (!gSimCore.TickUntil([&] { return gSimCore.mTop->vblank == 0; }, 10000000).Succeeded())
+                        break;
+                    if (!gSimCore.TickUntil([&] { return gSimCore.mTop->vblank != 0; }, 10000000).Succeeded())
+                        break;
                 }
                 if (commandQueue.IsVerbose())
                     printf("Completed running %llu frames\n", cmd.mCount);

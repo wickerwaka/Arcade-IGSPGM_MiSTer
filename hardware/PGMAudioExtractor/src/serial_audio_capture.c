@@ -5,7 +5,9 @@
 #include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "hardware/pio.h"
+#include "hardware/sync.h"
 #include "pico/stdlib.h"
+#include "serial_audio_capture.pio.h"
 
 #define SERIAL_AUDIO_CAPTURE_DMA_WORDS_PER_BLOCK 256u
 #define SERIAL_AUDIO_CAPTURE_DMA_BLOCK_COUNT 2u
@@ -22,10 +24,7 @@ static volatile uint8_t dma_ready_mask;
 static uint32_t dma_blocks[SERIAL_AUDIO_CAPTURE_DMA_BLOCK_COUNT][SERIAL_AUDIO_CAPTURE_DMA_WORDS_PER_BLOCK];
 
 static bool parser_synced;
-static bool parser_seen_transition;
-static bool parser_current_lrclk;
-static uint16_t parser_shift_reg;
-static uint32_t parser_bit_count;
+static uint32_t parser_word_count;
 static int16_t pending_left_sample;
 static int16_t pending_right_sample;
 static bool pending_left_valid;
@@ -33,14 +32,17 @@ static bool pending_right_valid;
 
 static volatile uint32_t dropped_dma_blocks;
 static volatile uint32_t dropped_audio_frames;
+static volatile uint32_t processed_dma_blocks;
+static volatile uint32_t channel_word_count;
+static volatile uint32_t stereo_frame_count;
+static volatile uint32_t nonzero_sample_count;
+static volatile int16_t last_left_sample;
+static volatile int16_t last_right_sample;
 
 static bool serial_audio_capture_config_valid(void) {
     return capture_buffer && capture_config.bits_per_sample == 16u &&
-           capture_config.si_gpio == (capture_config.lrclk_gpio + 1u);
-}
-
-static inline bool lrclk_state_is_left(bool lrclk_high) {
-    return capture_config.lrclk_low_is_left ? !lrclk_high : lrclk_high;
+           capture_config.clk_gpio == (capture_config.si_gpio + 1u) &&
+           capture_config.lrclk_gpio == (capture_config.si_gpio + 2u);
 }
 
 static inline int16_t sign_extend_sample(uint16_t sample) {
@@ -50,6 +52,16 @@ static inline int16_t sign_extend_sample(uint16_t sample) {
 static void queue_audio_frame(int16_t left, int16_t right) {
     if (!capture_buffer) {
         return;
+    }
+
+    last_left_sample = left;
+    last_right_sample = right;
+    stereo_frame_count++;
+    if (left != 0) {
+        nonzero_sample_count++;
+    }
+    if (right != 0) {
+        nonzero_sample_count++;
     }
 
     stereo_frame_t frame = {
@@ -62,13 +74,13 @@ static void queue_audio_frame(int16_t left, int16_t right) {
     }
 }
 
-static void finalize_channel_sample(bool lrclk_high, uint16_t sample) {
-    if (!parser_seen_transition) {
-        parser_seen_transition = true;
+static void finalize_channel_sample(bool is_left, uint16_t sample) {
+    if (!parser_synced) {
+        parser_synced = true;
         return;
     }
 
-    if (lrclk_state_is_left(lrclk_high)) {
+    if (is_left) {
         pending_left_sample = sign_extend_sample(sample);
         pending_left_valid = true;
     } else {
@@ -83,39 +95,19 @@ static void finalize_channel_sample(bool lrclk_high, uint16_t sample) {
     }
 }
 
-static void process_packed_sample(uint8_t packed_sample) {
-    bool lrclk_high = (packed_sample & 0x1u) != 0;
-    bool serial_high = (packed_sample & 0x2u) != 0;
+static void process_channel_word(uint32_t word) {
+    bool pushed_left = (word & 0x1u) != 0;
+    bool is_left = capture_config.lrclk_low_is_left ? pushed_left : !pushed_left;
+    uint16_t sample = (uint16_t)((word >> 1u) & 0xffffu);
 
-    if (!parser_synced) {
-        parser_synced = true;
-        parser_current_lrclk = lrclk_high;
-        parser_shift_reg = (uint16_t)serial_high;
-        parser_bit_count = 1;
-        return;
-    }
-
-    if (lrclk_high != parser_current_lrclk) {
-        finalize_channel_sample(parser_current_lrclk, parser_shift_reg);
-        parser_current_lrclk = lrclk_high;
-        parser_shift_reg = (uint16_t)serial_high;
-        parser_bit_count = 1;
-        return;
-    }
-
-    parser_shift_reg = (uint16_t)((parser_shift_reg << 1) | (serial_high ? 1u : 0u));
-    parser_bit_count++;
-}
-
-static void process_dma_word(uint32_t word) {
-    for (int shift = 30; shift >= 0; shift -= 2) {
-        process_packed_sample((uint8_t)((word >> (uint32_t)shift) & 0x3u));
-    }
+    parser_word_count++;
+    channel_word_count++;
+    finalize_channel_sample(is_left, sample);
 }
 
 static void process_dma_block(const uint32_t *block) {
     for (uint32_t i = 0; i < SERIAL_AUDIO_CAPTURE_DMA_WORDS_PER_BLOCK; ++i) {
-        process_dma_word(block[i]);
+        process_channel_word(block[i]);
     }
 }
 
@@ -143,22 +135,18 @@ static void serial_audio_capture_dma_irq_handler(void) {
     dma_channel_set_trans_count(capture_dma_chan, SERIAL_AUDIO_CAPTURE_DMA_WORDS_PER_BLOCK, true);
 }
 
-static uint16_t capture_program_instructions[8];
-static const struct pio_program capture_program = {
-    .instructions = capture_program_instructions,
-    .length = 8,
-    .origin = -1,
-};
+static bool serial_audio_capture_take_ready_block(uint8_t *block_index) {
+    uint32_t irq_state = save_and_disable_interrupts();
+    uint8_t ready_mask = dma_ready_mask;
+    if (ready_mask == 0) {
+        restore_interrupts(irq_state);
+        return false;
+    }
 
-static void build_capture_program(uint clk_gpio) {
-    capture_program_instructions[0] = pio_encode_wait_gpio(false, clk_gpio);
-    capture_program_instructions[1] = pio_encode_wait_gpio(true, clk_gpio);
-    capture_program_instructions[2] = pio_encode_in(pio_pins, 2);
-    capture_program_instructions[3] = pio_encode_jmp(0);
-    capture_program_instructions[4] = pio_encode_wait_gpio(true, clk_gpio);
-    capture_program_instructions[5] = pio_encode_wait_gpio(false, clk_gpio);
-    capture_program_instructions[6] = pio_encode_in(pio_pins, 2);
-    capture_program_instructions[7] = pio_encode_jmp(4);
+    *block_index = (ready_mask & 0x1u) ? 0u : 1u;
+    dma_ready_mask &= (uint8_t)~(1u << *block_index);
+    restore_interrupts(irq_state);
+    return true;
 }
 
 static void serial_audio_capture_start_dma(void) {
@@ -190,16 +178,19 @@ void serial_audio_capture_init(const serial_audio_capture_config_t *config, ster
     capture_buffer = target_buffer;
     capture_running = false;
     parser_synced = false;
-    parser_seen_transition = false;
-    parser_current_lrclk = false;
-    parser_shift_reg = 0;
-    parser_bit_count = 0;
+    parser_word_count = 0;
     pending_left_sample = 0;
     pending_right_sample = 0;
     pending_left_valid = false;
     pending_right_valid = false;
     dropped_dma_blocks = 0;
     dropped_audio_frames = 0;
+    processed_dma_blocks = 0;
+    channel_word_count = 0;
+    stereo_frame_count = 0;
+    nonzero_sample_count = 0;
+    last_left_sample = 0;
+    last_right_sample = 0;
     capture_dma_chan = -1;
 
     if (!serial_audio_capture_config_valid()) {
@@ -223,25 +214,25 @@ void serial_audio_capture_enable(void) {
         return;
     }
 
-    build_capture_program(capture_config.clk_gpio);
-
     capture_sm = pio_claim_unused_sm(capture_pio, true);
-    uint capture_offset = pio_add_program(capture_pio, &capture_program);
+    uint capture_offset = pio_add_program(capture_pio, &serial_audio_capture_lr_program);
 
+    pio_gpio_init(capture_pio, capture_config.si_gpio);
     pio_gpio_init(capture_pio, capture_config.clk_gpio);
     pio_gpio_init(capture_pio, capture_config.lrclk_gpio);
-    pio_gpio_init(capture_pio, capture_config.si_gpio);
 
-    pio_sm_config sm_config = pio_get_default_sm_config();
-    sm_config_set_in_pins(&sm_config, capture_config.lrclk_gpio);
-    sm_config_set_in_shift(&sm_config, false, true, 32);
+    pio_sm_config sm_config = serial_audio_capture_lr_program_get_default_config(capture_offset);
+    sm_config_set_in_pins(&sm_config, capture_config.si_gpio);
+    sm_config_set_in_shift(&sm_config, false, false, 0);
     sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&sm_config, 1.0f);
+    sm_config_set_in_pin_count(&sm_config, 2);
+    sm_config_set_jmp_pin(&sm_config, capture_config.lrclk_gpio);
 
-    uint entry_offset = capture_offset + (capture_config.sample_on_rising_edge ? 0u : 4u);
-    sm_config_set_wrap(&sm_config, entry_offset, entry_offset + 3u);
+    uint entry_offset = capture_offset;
     pio_sm_init(capture_pio, capture_sm, entry_offset, &sm_config);
-    pio_sm_set_consecutive_pindirs(capture_pio, capture_sm, capture_config.lrclk_gpio, 2, false);
+    pio_sm_set_consecutive_pindirs(capture_pio, capture_sm, capture_config.si_gpio, 2, false);
+    pio_sm_set_consecutive_pindirs(capture_pio, capture_sm, capture_config.lrclk_gpio, 1, false);
     pio_sm_set_enabled(capture_pio, capture_sm, true);
 
     capture_dma_chan = dma_claim_unused_channel(true);
@@ -250,16 +241,23 @@ void serial_audio_capture_enable(void) {
 }
 
 void serial_audio_capture_task(void) {
-    while (dma_ready_mask != 0) {
-        uint8_t ready_mask = dma_ready_mask;
-        uint8_t block_index = (ready_mask & 0x1u) ? 0u : 1u;
-        dma_ready_mask &= (uint8_t)~(1u << block_index);
+    uint8_t block_index;
+    if (serial_audio_capture_take_ready_block(&block_index)) {
         process_dma_block(dma_blocks[block_index]);
+        processed_dma_blocks++;
     }
 }
 
 bool serial_audio_capture_is_running(void) {
     return capture_running;
+}
+
+uint32_t serial_audio_capture_get_processed_dma_blocks(void) {
+    return processed_dma_blocks;
+}
+
+uint32_t serial_audio_capture_get_ready_mask(void) {
+    return dma_ready_mask;
 }
 
 uint32_t serial_audio_capture_get_dropped_dma_blocks(void) {
@@ -268,4 +266,24 @@ uint32_t serial_audio_capture_get_dropped_dma_blocks(void) {
 
 uint32_t serial_audio_capture_get_dropped_audio_frames(void) {
     return dropped_audio_frames;
+}
+
+uint32_t serial_audio_capture_get_channel_word_count(void) {
+    return channel_word_count;
+}
+
+uint32_t serial_audio_capture_get_stereo_frame_count(void) {
+    return stereo_frame_count;
+}
+
+uint32_t serial_audio_capture_get_nonzero_sample_count(void) {
+    return nonzero_sample_count;
+}
+
+int16_t serial_audio_capture_get_last_left_sample(void) {
+    return last_left_sample;
+}
+
+int16_t serial_audio_capture_get_last_right_sample(void) {
+    return last_right_sample;
 }

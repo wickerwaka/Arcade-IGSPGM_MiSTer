@@ -46,9 +46,9 @@ int main(void) {
     board_init();
 
     serial_audio_capture_config_t capture_config = {
-        .clk_gpio = 13,
-        .lrclk_gpio = 14,
-        .si_gpio = 15,
+        .si_gpio = 13,
+        .clk_gpio = 14,
+        .lrclk_gpio = 15,
         .lrclk_low_is_left = true,
         .sample_on_rising_edge = true,
         .bits_per_sample = 16,
@@ -71,23 +71,27 @@ int main(void) {
     stdio_init_all();
 
     printf("PGMAudioExtractor starting\r\n");
+    printf("startup pins: clk=%lu lrclk=%lu si=%lu sample_edge=%s bits=%u\r\n",
+           (unsigned long)capture_config.clk_gpio,
+           (unsigned long)capture_config.lrclk_gpio,
+           (unsigned long)capture_config.si_gpio,
+           capture_config.sample_on_rising_edge ? "rising" : "falling",
+           (unsigned)capture_config.bits_per_sample);
+
+    printf("enabling capture path\r\n");
+    rate_measure_enable();
+    serial_audio_capture_enable();
+    printf("rate_measure enabled on LRCLK gpio %lu\r\n", (unsigned long)capture_config.lrclk_gpio);
+    printf("serial_audio_capture enabled on CLK gpio %lu, LRCLK gpio %lu, SI gpio %lu\r\n",
+           (unsigned long)capture_config.clk_gpio,
+           (unsigned long)capture_config.lrclk_gpio,
+           (unsigned long)capture_config.si_gpio);
 
     while (true) {
         static uint32_t last_log_ms;
-        static bool rate_measure_started;
+        static uint32_t heartbeat_count;
 
         tud_task();
-
-        if (!rate_measure_started && board_millis() >= 3000) {
-            rate_measure_enable();
-            serial_audio_capture_enable();
-            rate_measure_started = true;
-            printf("rate_measure enabled on LRCLK gpio %lu\r\n", (unsigned long)capture_config.lrclk_gpio);
-            printf("serial_audio_capture enabled on CLK gpio %lu, LRCLK gpio %lu, SI gpio %lu\r\n",
-                   (unsigned long)capture_config.clk_gpio,
-                   (unsigned long)capture_config.lrclk_gpio,
-                   (unsigned long)capture_config.si_gpio);
-        }
 
         rate_measure_task();
         serial_audio_capture_task();
@@ -95,9 +99,12 @@ int main(void) {
         led_task();
 
         uint32_t now = board_millis();
-        if ((now - last_log_ms) >= 1000) {
+        if ((now - last_log_ms) >= 2000) {
             last_log_ms = now;
-            printf("lrclk_rate=%lu raw=%lu edges=%lu elapsed_us=%lu idle_us=%lu status=%s usb_rate=%lu valid=%u cap=%u dma_drop=%lu frame_drop=%lu mounted=%u suspended=%u\r\n",
+            heartbeat_count++;
+            printf("heartbeat=%lu phase=%s lrclk_rate=%lu raw=%lu edges=%lu elapsed_us=%lu idle_us=%lu status=%s usb_rate=%lu valid=%u cap=%u dma_ready=0x%02lx dma_done=%lu dma_drop=%lu frame_drop=%lu chan_words=%lu stereo=%lu nonzero=%lu last_l=%d last_r=%d mounted=%u suspended=%u\r\n",
+                   (unsigned long)heartbeat_count,
+                   "capture_on",
                    (unsigned long)rate_measure_get_hz(),
                    (unsigned long)rate_measure_get_raw_hz(),
                    (unsigned long)rate_measure_get_edge_count(),
@@ -107,8 +114,15 @@ int main(void) {
                    (unsigned long)usb_audio_get_current_sample_rate(),
                    (unsigned)rate_measure_is_valid(),
                    (unsigned)serial_audio_capture_is_running(),
+                   (unsigned long)serial_audio_capture_get_ready_mask(),
+                   (unsigned long)serial_audio_capture_get_processed_dma_blocks(),
                    (unsigned long)serial_audio_capture_get_dropped_dma_blocks(),
                    (unsigned long)serial_audio_capture_get_dropped_audio_frames(),
+                   (unsigned long)serial_audio_capture_get_channel_word_count(),
+                   (unsigned long)serial_audio_capture_get_stereo_frame_count(),
+                   (unsigned long)serial_audio_capture_get_nonzero_sample_count(),
+                   (int)serial_audio_capture_get_last_left_sample(),
+                   (int)serial_audio_capture_get_last_right_sample(),
                    (unsigned)tud_mounted(),
                    (unsigned)tud_suspended());
         }

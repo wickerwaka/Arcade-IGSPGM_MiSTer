@@ -1,15 +1,80 @@
 .program serial_audio_capture
-; Placeholder PIO program for external-clocked stereo serial audio capture.
-; Planned use:
-; - external CLK drives shifting
-; - LRCLK selects left/right channel
-; - SI carries 16-bit signed PCM, MSB first
-; - firmware will support the source's backward-justified alignment
-;
-; This scaffold intentionally keeps the program minimal until timing on the
-; actual hardware is verified.
+; External-clocked serial audio sampler.
+; Assumes sequential GPIOs:
+;   base + 0 = LRCLK
+;   base + 1 = SI
+; CLK is provided via the state machine JMP pin.
+; Each sample shifts in 2 bits: bit0=LRCLK, bit1=SI.
 
 .wrap_target
-    wait 1 pin 0
+sample_rising:
+wait_clk_low:
+    jmp pin clk_was_high_rising
+    jmp wait_clk_high
+clk_was_high_rising:
+    jmp wait_clk_low
+wait_clk_high:
+    jmp pin do_sample_rising
+    jmp wait_clk_high
+
+do_sample_rising:
+    in pins, 2
+    jmp wait_clk_low
+
+sample_falling:
+wait_clk_high_falling:
+    jmp pin clk_is_high_falling
+    jmp wait_clk_high_falling
+clk_is_high_falling:
+wait_clk_low_falling:
+    jmp pin wait_clk_low_falling
+    in pins, 2
+    jmp wait_clk_high_falling
+.wrap
+
+.program serial_audio_capture_lr
+; Compact channel-oriented capture.
+; Assumes sequential GPIOs:
+;   base + 0 = SI
+;   base + 1 = CLK
+; JMP pin      = LRCLK
+;
+; Pushes one 17-bit word per completed channel period:
+;   bits[16:1] = last 16 sampled SI bits
+;   bit[0]     = channel tag (0 = right, 1 = left)
+;
+; SI is sampled on CLK rising edges.
+
+.wrap_target
+start:
+    set x, 0              ; right tag
+    set y, 1              ; left tag
+    jmp pin left_begin
+    jmp right_begin
+
+right_begin:
+    mov isr, null
+    wait 0 pin 1
+right_loop:
+    wait 1 pin 1
     in pins, 1
+    wait 0 pin 1
+    jmp pin right_done
+    jmp right_loop
+
+right_done:
+    in x, 1
+    push
+
+left_begin:
+    mov isr, null
+    wait 0 pin 1
+left_loop:
+    wait 1 pin 1
+    in pins, 1
+    wait 0 pin 1
+    jmp pin left_loop
+    in y, 1
+    push
+    jmp right_begin
 .wrap
