@@ -40,6 +40,8 @@ const char *RunStopReasonToString(RunStopReason reason)
 }
 } // namespace
 
+SimController gSimController;
+
 ControllerResult<EmptyResult> SimController::EnsureInitialized() const
 {
     if (!mInitialized)
@@ -352,6 +354,16 @@ ControllerResult<EmptyResult> SimController::SetDipSwitchB(uint8_t value)
     mDipSwitchB = value;
     gSimCore.mTop->dswb = mDipSwitchB;
     return ControllerResult<EmptyResult>::Success({});
+}
+
+uint8_t SimController::GetDipSwitchA() const
+{
+    return mDipSwitchA;
+}
+
+uint8_t SimController::GetDipSwitchB() const
+{
+    return mDipSwitchB;
 }
 
 ControllerResult<StateListResult> SimController::ListStates() const

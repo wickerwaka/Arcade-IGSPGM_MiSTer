@@ -139,6 +139,8 @@ class SimController
 
     ControllerResult<EmptyResult> SetDipSwitchA(uint8_t value);
     ControllerResult<EmptyResult> SetDipSwitchB(uint8_t value);
+    uint8_t GetDipSwitchA() const;
+    uint8_t GetDipSwitchB() const;
 
     ControllerResult<StateListResult> ListStates() const;
     ControllerResult<EmptyResult> SaveState(const std::string &filename);
@@ -161,3 +163,5 @@ class SimController
     RunStopReason ConvertTickStopReason(TickStopReason reason) const;
     ControllerResult<EmptyResult> EnsureInitialized() const;
 };
+
+extern SimController gSimController;

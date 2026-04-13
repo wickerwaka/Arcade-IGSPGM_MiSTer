@@ -2,23 +2,17 @@
 #include "sim_ui.h"
 #include "imgui_wrap.h"
 #include "third_party/imgui_memory_editor.h"
+#include "sim_controller.h"
 #include "sim_core.h"
-#include "sim_state.h"
 #include "sim_hierarchy.h"
-#include "sim_command.h"
-#include "games.h"
 #include "PGM.h"
 #include "PGM___024root.h"
 #include "verilated_fst_c.h"
 #include "sim_sdram.h"
 #include "sim_ddr.h"
 
-extern SimState *gStateManager;
-
-static CommandQueue *gCommandQueue = nullptr;
-
-extern uint32_t gDipswitchA;
-extern uint32_t gDipswitchB;
+#include <algorithm>
+#include <cstring>
 
 class MemoryInterfaceEditor : public MemoryEditor
 {
@@ -55,11 +49,6 @@ class MemoryInterfaceEditor : public MemoryEditor
 void UiInit(const char *title)
 {
     ImguiInit(title);
-}
-
-void UiSetCommandQueue(CommandQueue *queue)
-{
-    gCommandQueue = queue;
 }
 
 bool UiBeginFrame()
@@ -104,7 +93,7 @@ void UiDraw()
 
         if (ImGui::Button("Reset"))
         {
-            gCommandQueue->Add(Command(CommandType::RESET, 100));
+            gSimController.Reset(100);
         }
 
         ImGui::SameLine();
@@ -124,8 +113,22 @@ void UiDraw()
         // Auto-generate filename when file list is loaded/updated
         if (gRefreshStateFiles)
         {
-            sStateFiles = gStateManager->GetPgmstateFiles();
-            std::string autoName = gStateManager->GenerateNextStateName();
+            auto listResult = gSimController.ListStates();
+            sStateFiles = listResult.ok ? listResult.value.mStates : std::vector<std::string>{};
+            std::string autoName = sStateFiles.size() < 1000 ? "000.pgmstate" : "999.pgmstate";
+            if (!sStateFiles.empty())
+            {
+                for (int i = 0; i < 1000; i++)
+                {
+                    char candidate[32];
+                    snprintf(candidate, sizeof(candidate), "%03d.pgmstate", i);
+                    if (std::find(sStateFiles.begin(), sStateFiles.end(), candidate) == sStateFiles.end())
+                    {
+                        autoName = candidate;
+                        break;
+                    }
+                }
+            }
             strncpy(sStateFilename, autoName.c_str(), sizeof(sStateFilename) - 1);
             sStateFilename[sizeof(sStateFilename) - 1] = '\0';
             gRefreshStateFiles = false;
@@ -142,10 +145,11 @@ void UiDraw()
                 sStateFilename[sizeof(sStateFilename) - 1] = '\0';
             }
 
-            if (gStateManager->SaveState(sStateFilename))
+            if (gSimController.SaveState(sStateFilename).ok)
             {
                 // Update file list after successfully saving
-                sStateFiles = gStateManager->GetPgmstateFiles();
+                auto listResult = gSimController.ListStates();
+                sStateFiles = listResult.ok ? listResult.value.mStates : std::vector<std::string>{};
                 // Try to select the newly saved file
                 for (size_t i = 0; i < sStateFiles.size(); i++)
                 {
@@ -156,7 +160,17 @@ void UiDraw()
                     }
                 }
                 // Auto-generate next filename after successful save
-                std::string autoName = gStateManager->GenerateNextStateName();
+                std::string autoName = sStateFilename;
+                for (int i = 0; i < 1000; i++)
+                {
+                    char candidate[32];
+                    snprintf(candidate, sizeof(candidate), "%03d.pgmstate", i);
+                    if (std::find(sStateFiles.begin(), sStateFiles.end(), candidate) == sStateFiles.end())
+                    {
+                        autoName = candidate;
+                        break;
+                    }
+                }
                 strncpy(sStateFilename, autoName.c_str(), sizeof(sStateFilename) - 1);
                 sStateFilename[sizeof(sStateFilename) - 1] = '\0';
             }
@@ -174,7 +188,7 @@ void UiDraw()
                     sSelectedStateFile = (int)i;
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
-                        gStateManager->RestoreState(sStateFiles[i].c_str());
+                        gSimController.LoadState(sStateFiles[i].c_str());
                     }
                 }
             }
@@ -225,6 +239,9 @@ class DipswitchWindow : public Window
     void Init() {};
     void Draw()
     {
+        uint32_t dipSwitchA = gSimController.GetDipSwitchA();
+        uint32_t dipSwitchB = gSimController.GetDipSwitchB();
+
         if (ImGui::BeginTable("dipswitches", 9))
         {
             ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
@@ -243,7 +260,7 @@ class DipswitchWindow : public Window
             {
                 ImGui::TableNextColumn();
                 ImGui::PushID(i);
-                ImGui::CheckboxFlags("##dwsa", &gDipswitchA, ((uint32_t)1 << i));
+                ImGui::CheckboxFlags("##dwsa", &dipSwitchA, ((uint32_t)1 << i));
                 ImGui::PopID();
             }
             ImGui::TableNextColumn();
@@ -252,11 +269,14 @@ class DipswitchWindow : public Window
             {
                 ImGui::TableNextColumn();
                 ImGui::PushID(i);
-                ImGui::CheckboxFlags("##dwsb", &gDipswitchB, ((uint32_t)1 << i));
+                ImGui::CheckboxFlags("##dwsb", &dipSwitchB, ((uint32_t)1 << i));
                 ImGui::PopID();
             }
             ImGui::EndTable();
         }
+
+        gSimController.SetDipSwitchA(static_cast<uint8_t>(dipSwitchA));
+        gSimController.SetDipSwitchB(static_cast<uint8_t>(dipSwitchB));
     }
 };
 
