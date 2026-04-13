@@ -13,7 +13,7 @@ VERILATED_DIR = verilated
 GAME ?= pgm
 
 VERILATOR = verilator
-VERILATOR_ARGS = --cc --make gmake --trace-fst --Mdir $(VERILATED_DIR) -Ihdl --MMD --MP \
+VERILATOR_ARGS = --cc --make gmake --trace-fst --vpi --Mdir $(VERILATED_DIR) -Ihdl --MMD --MP \
 				-Wno-TIMESCALEMOD \
 				-Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
           		-Wno-CASEINCOMPLETE -Wno-UNUSEDSIGNAL
@@ -21,7 +21,7 @@ VERILATOR_ARGS = --cc --make gmake --trace-fst --Mdir $(VERILATED_DIR) -Ihdl --M
 PYTHON = python3
 
 VERILATOR_INC = $(shell pkg-config --variable=includedir verilator)
-VERILATOR_CPP = verilated.cpp verilated_fst_c.cpp verilated_threads.cpp
+VERILATOR_CPP = verilated.cpp verilated_fst_c.cpp verilated_threads.cpp verilated_vpi.cpp
 VERILATOR_OBJS = $(patsubst %.cpp, $(OBJ_DIR)/verilator/%.o, $(VERILATOR_CPP))
 
 SRCS = imgui/imgui.cpp \

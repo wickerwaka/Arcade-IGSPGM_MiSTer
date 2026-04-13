@@ -453,6 +453,14 @@ Condition ParseCondition(const JsonValue &json)
         condition.mType = Condition::Type::SIGNAL_EQUALS;
     else if (type == "signal_not_equals")
         condition.mType = Condition::Type::SIGNAL_NOT_EQUALS;
+    else if (type == "signal_less_than")
+        condition.mType = Condition::Type::SIGNAL_LESS_THAN;
+    else if (type == "signal_less_equal")
+        condition.mType = Condition::Type::SIGNAL_LESS_EQUAL;
+    else if (type == "signal_greater_than")
+        condition.mType = Condition::Type::SIGNAL_GREATER_THAN;
+    else if (type == "signal_greater_equal")
+        condition.mType = Condition::Type::SIGNAL_GREATER_EQUAL;
     else if (type == "cpu_pc_equals")
         condition.mType = Condition::Type::CPU_PC_EQUALS;
     else if (type == "cpu_pc_in_range")
@@ -668,11 +676,33 @@ std::string SimProtocol::HandleLine(const std::string &line)
         if (method == "signal.read")
         {
             auto result = mController.ReadSignal(RequireString(RequireObjectField(params, "name"), "name"));
+            if (!result.ok)
+                return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
             JsonValue payload = JsonValue::Object({
                 {"name", JsonValue::String(result.value.mSignal)},
                 {"value", JsonValue::Number(result.value.mValue)},
+                {"width", JsonValue::Number(result.value.mWidth)},
+                {"value_hex", JsonValue::String(result.value.mValueHex)},
             });
             return SerializeJson(WrapControllerResult(id, result, payload));
+        }
+        if (method == "signal.list")
+        {
+            auto result = mController.ListSignals();
+            if (!result.ok)
+                return SerializeJson(MakeErrorResponse(id, result.errorCode, result.errorMessage));
+
+            std::vector<JsonValue> signals;
+            for (const auto &signal : result.value.mSignals)
+            {
+                signals.push_back(JsonValue::Object({
+                    {"name", JsonValue::String(signal.mName)},
+                    {"width", JsonValue::Number(signal.mWidth)},
+                    {"kind", JsonValue::String(signal.mKind)},
+                    {"source", JsonValue::String(signal.mSource)},
+                }));
+            }
+            return SerializeJson(MakeSuccessResponse(id, JsonValue::Object({{"signals", JsonValue::Array(std::move(signals))}})));
         }
         if (method == "state.list")
         {

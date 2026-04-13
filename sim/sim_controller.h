@@ -2,10 +2,12 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "m68k.h"
 #include "sim_core.h"
+#include "verilated_vpi.h"
 
 class SimState;
 
@@ -84,6 +86,21 @@ struct SignalReadResult
 {
     std::string mSignal;
     uint64_t mValue = 0;
+    uint32_t mWidth = 0;
+    std::string mValueHex;
+};
+
+struct SignalInfo
+{
+    std::string mName;
+    uint32_t mWidth = 0;
+    std::string mKind;
+    std::string mSource;
+};
+
+struct SignalListResult
+{
+    std::vector<SignalInfo> mSignals;
 };
 
 struct ScreenshotResult
@@ -102,6 +119,10 @@ struct Condition
     {
         SIGNAL_EQUALS,
         SIGNAL_NOT_EQUALS,
+        SIGNAL_LESS_THAN,
+        SIGNAL_LESS_EQUAL,
+        SIGNAL_GREATER_THAN,
+        SIGNAL_GREATER_EQUAL,
         CPU_PC_EQUALS,
         CPU_PC_IN_RANGE,
         CPU_PC_OUT_OF_RANGE,
@@ -144,6 +165,7 @@ class SimController
     ControllerResult<EmptyResult> WriteMemory(const std::string &region, uint32_t address, const std::vector<uint8_t> &data);
     ControllerResult<std::vector<std::string>> ListRegions() const;
     ControllerResult<SignalReadResult> ReadSignal(const std::string &signal) const;
+    ControllerResult<SignalListResult> ListSignals() const;
 
     ControllerResult<EmptyResult> SetDipSwitchA(uint8_t value);
     ControllerResult<EmptyResult> SetDipSwitchB(uint8_t value);
@@ -164,10 +186,15 @@ class SimController
     SimState *mStateManager = nullptr;
     uint8_t mDipSwitchA = 1;
     uint8_t mDipSwitchB = 0;
+    mutable std::unordered_map<std::string, vpiHandle> mVpiHandleCache;
 
     bool EvaluateCondition(const Condition &condition) const;
     ControllerResult<MemoryRegion> ParseRegion(const std::string &name) const;
-    uint64_t ReadSignalValue(const std::string &signal) const;
+    ControllerResult<SignalReadResult> ReadSignalValue(const std::string &signal) const;
+    ControllerResult<SignalReadResult> ReadSignalValueBuiltin(const std::string &signal) const;
+    ControllerResult<SignalReadResult> ReadSignalValueVpi(const std::string &signal) const;
+    vpiHandle LookupVpiHandle(const std::string &signal) const;
+    ControllerResult<SignalListResult> ListSignalsVpi() const;
     RunStopReason ConvertTickStopReason(TickStopReason reason) const;
     ControllerResult<EmptyResult> EnsureInitialized() const;
 };

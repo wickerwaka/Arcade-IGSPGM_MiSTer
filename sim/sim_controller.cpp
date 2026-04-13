@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <set>
+#include <sstream>
 
 #include "file_search.h"
 #include "gfx_cache.h"
@@ -15,6 +17,8 @@
 #include "PGM.h"
 #include "PGM___024root.h"
 #include "verilated.h"
+
+#include "vltstd/vpi_user.h"
 
 namespace
 {
@@ -37,6 +41,58 @@ const char *RunStopReasonToString(RunStopReason reason)
         return "error";
     }
     return "error";
+}
+
+const char *VpiTypeToKind(PLI_INT32 type)
+{
+    switch (type)
+    {
+    case vpiModule:
+        return "module";
+    case vpiReg:
+        return "reg";
+    case vpiNet:
+        return "net";
+    case vpiMemoryWord:
+        return "memory_word";
+    default:
+        return "signal";
+    }
+}
+
+void CollectVpiSignalsRecursive(vpiHandle moduleHandle, std::vector<SignalInfo> &signals, std::set<std::string> &seen)
+{
+    if (moduleHandle == nullptr)
+        return;
+
+    if (vpiHandle regIter = vpi_iterate(vpiReg, moduleHandle))
+    {
+        while (vpiHandle regHandle = vpi_scan(regIter))
+        {
+            const char *fullName = vpi_get_str(vpiFullName, regHandle);
+            if (fullName == nullptr)
+                continue;
+
+            std::string name = fullName;
+            if (!seen.insert(name).second)
+                continue;
+
+            SignalInfo info;
+            info.mName = name;
+            info.mWidth = std::max(0, vpi_get(vpiSize, regHandle));
+            info.mKind = VpiTypeToKind(vpi_get(vpiType, regHandle));
+            info.mSource = "vpi";
+            signals.push_back(std::move(info));
+        }
+    }
+
+    if (vpiHandle moduleIter = vpi_iterate(vpiModule, moduleHandle))
+    {
+        while (vpiHandle childModule = vpi_scan(moduleIter))
+        {
+            CollectVpiSignalsRecursive(childModule, signals, seen);
+        }
+    }
 }
 } // namespace
 
@@ -103,6 +159,7 @@ ControllerResult<EmptyResult> SimController::Shutdown()
     }
 
     mInitialized = false;
+    mVpiHandleCache.clear();
     return ControllerResult<EmptyResult>::Success({});
 }
 
@@ -358,16 +415,34 @@ ControllerResult<SignalReadResult> SimController::ReadSignal(const std::string &
         return ControllerResult<SignalReadResult>::Failure(initResult.errorCode, initResult.errorMessage);
     }
 
-    static const std::vector<std::string> kSignals = {"vblank", "hblank", "reset", "rom_load_busy", "ss_state_out"};
-    if (std::find(kSignals.begin(), kSignals.end(), signal) == kSignals.end())
+    return ReadSignalValue(signal);
+}
+
+ControllerResult<SignalListResult> SimController::ListSignals() const
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
     {
-        return ControllerResult<SignalReadResult>::Failure("invalid_signal", "Unknown signal: " + signal);
+        return ControllerResult<SignalListResult>::Failure(initResult.errorCode, initResult.errorMessage);
     }
 
-    SignalReadResult result;
-    result.mSignal = signal;
-    result.mValue = ReadSignalValue(signal);
-    return ControllerResult<SignalReadResult>::Success(result);
+    SignalListResult result;
+    result.mSignals.push_back({"vblank", 1, "alias", "builtin"});
+    result.mSignals.push_back({"hblank", 1, "alias", "builtin"});
+    result.mSignals.push_back({"reset", 1, "alias", "builtin"});
+    result.mSignals.push_back({"rom_load_busy", 1, "alias", "builtin"});
+    result.mSignals.push_back({"ss_state_out", 32, "alias", "builtin"});
+
+    auto vpiResult = ListSignalsVpi();
+    if (!vpiResult.ok)
+    {
+        return vpiResult;
+    }
+
+    result.mSignals.insert(result.mSignals.end(), vpiResult.value.mSignals.begin(), vpiResult.value.mSignals.end());
+    std::sort(result.mSignals.begin(), result.mSignals.end(),
+              [](const SignalInfo &a, const SignalInfo &b) { return a.mName < b.mName; });
+    return ControllerResult<SignalListResult>::Success(result);
 }
 
 ControllerResult<EmptyResult> SimController::SetDipSwitchA(uint8_t value)
@@ -480,19 +555,153 @@ ControllerResult<ScreenshotResult> SimController::SaveScreenshot(const std::stri
     return ControllerResult<ScreenshotResult>::Success(result);
 }
 
-uint64_t SimController::ReadSignalValue(const std::string &signal) const
+ControllerResult<SignalReadResult> SimController::ReadSignalValue(const std::string &signal) const
 {
+    auto builtinResult = ReadSignalValueBuiltin(signal);
+    if (builtinResult.ok)
+    {
+        return builtinResult;
+    }
+
+    return ReadSignalValueVpi(signal);
+}
+
+ControllerResult<SignalReadResult> SimController::ReadSignalValueBuiltin(const std::string &signal) const
+{
+    SignalReadResult result;
+    result.mSignal = signal;
+    result.mWidth = 1;
+
     if (signal == "vblank")
-        return gSimCore.mTop->vblank;
-    if (signal == "hblank")
-        return gSimCore.mTop->hblank;
-    if (signal == "reset")
-        return gSimCore.mTop->reset;
-    if (signal == "rom_load_busy")
-        return gSimCore.mTop->rootp->sim_top__DOT__rom_load_busy;
-    if (signal == "ss_state_out")
-        return gSimCore.mTop->ss_state_out;
-    return 0;
+    {
+        result.mValue = gSimCore.mTop->vblank;
+    }
+    else if (signal == "hblank")
+    {
+        result.mValue = gSimCore.mTop->hblank;
+    }
+    else if (signal == "reset")
+    {
+        result.mValue = gSimCore.mTop->reset;
+    }
+    else if (signal == "rom_load_busy")
+    {
+        result.mValue = gSimCore.mTop->rootp->sim_top__DOT__rom_load_busy;
+    }
+    else if (signal == "ss_state_out")
+    {
+        result.mValue = gSimCore.mTop->ss_state_out;
+        result.mWidth = 32;
+    }
+    else
+    {
+        return ControllerResult<SignalReadResult>::Failure("invalid_signal", "Unknown built-in signal: " + signal);
+    }
+
+    std::ostringstream valueHex;
+    valueHex << std::hex << result.mValue;
+    result.mValueHex = valueHex.str();
+    return ControllerResult<SignalReadResult>::Success(result);
+}
+
+vpiHandle SimController::LookupVpiHandle(const std::string &signal) const
+{
+    auto it = mVpiHandleCache.find(signal);
+    if (it != mVpiHandleCache.end())
+    {
+        return it->second;
+    }
+
+    const std::string candidates[] = {
+        signal,
+        signal.rfind("TOP.", 0) == 0 ? signal : "TOP." + signal,
+        signal.rfind("sim_top.", 0) == 0 ? signal : "sim_top." + signal,
+        signal.rfind("TOP.", 0) == 0 || signal.rfind("sim_top.", 0) == 0 ? signal : "TOP.sim_top." + signal,
+    };
+
+    for (const auto &candidate : candidates)
+    {
+        vpiHandle handle = vpi_handle_by_name(const_cast<PLI_BYTE8 *>(candidate.c_str()), nullptr);
+        if (handle != nullptr)
+        {
+            mVpiHandleCache[signal] = handle;
+            return handle;
+        }
+    }
+
+    return nullptr;
+}
+
+ControllerResult<SignalReadResult> SimController::ReadSignalValueVpi(const std::string &signal) const
+{
+    vpiHandle handle = LookupVpiHandle(signal);
+    if (handle == nullptr)
+    {
+        return ControllerResult<SignalReadResult>::Failure(
+            "invalid_signal", "Unknown signal: " + signal + " (also tried TOP." + signal + ")");
+    }
+
+    int width = vpi_get(vpiSize, handle);
+    if (width <= 0)
+    {
+        return ControllerResult<SignalReadResult>::Failure("signal_read_failed", "Failed to determine signal width: " + signal);
+    }
+    if (width > 64)
+    {
+        return ControllerResult<SignalReadResult>::Failure("signal_too_wide", "Signal is wider than 64 bits: " + signal);
+    }
+
+    s_vpi_value value;
+    value.format = vpiHexStrVal;
+    vpi_get_value(handle, &value);
+    if (value.value.str == nullptr)
+    {
+        return ControllerResult<SignalReadResult>::Failure("signal_read_failed", "Failed to read signal value: " + signal);
+    }
+
+    std::string valueHex = value.value.str;
+    for (char c : valueHex)
+    {
+        if (c == 'x' || c == 'X' || c == 'z' || c == 'Z')
+        {
+            return ControllerResult<SignalReadResult>::Failure("signal_has_unknown_bits", "Signal has X/Z bits: " + signal);
+        }
+    }
+
+    uint64_t parsedValue = 0;
+    std::stringstream stream;
+    stream << std::hex << valueHex;
+    stream >> parsedValue;
+    if (stream.fail())
+    {
+        return ControllerResult<SignalReadResult>::Failure("signal_read_failed", "Failed to parse signal value: " + signal);
+    }
+
+    SignalReadResult result;
+    result.mSignal = signal;
+    result.mValue = parsedValue;
+    result.mWidth = static_cast<uint32_t>(width);
+    result.mValueHex = valueHex;
+    return ControllerResult<SignalReadResult>::Success(result);
+}
+
+ControllerResult<SignalListResult> SimController::ListSignalsVpi() const
+{
+    SignalListResult result;
+    std::set<std::string> seen;
+
+    vpiHandle moduleIter = vpi_iterate(vpiModule, nullptr);
+    if (moduleIter == nullptr)
+    {
+        return ControllerResult<SignalListResult>::Failure("signal_list_failed", "Failed to enumerate VPI modules");
+    }
+
+    while (vpiHandle moduleHandle = vpi_scan(moduleIter))
+    {
+        CollectVpiSignalsRecursive(moduleHandle, result.mSignals, seen);
+    }
+
+    return ControllerResult<SignalListResult>::Success(result);
 }
 
 bool SimController::EvaluateCondition(const Condition &condition) const
@@ -500,9 +709,35 @@ bool SimController::EvaluateCondition(const Condition &condition) const
     switch (condition.mType)
     {
     case Condition::Type::SIGNAL_EQUALS:
-        return ReadSignalValue(condition.mSignal) == condition.mValue;
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue == condition.mValue;
+    }
     case Condition::Type::SIGNAL_NOT_EQUALS:
-        return ReadSignalValue(condition.mSignal) != condition.mValue;
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue != condition.mValue;
+    }
+    case Condition::Type::SIGNAL_LESS_THAN:
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue < condition.mValue;
+    }
+    case Condition::Type::SIGNAL_LESS_EQUAL:
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue <= condition.mValue;
+    }
+    case Condition::Type::SIGNAL_GREATER_THAN:
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue > condition.mValue;
+    }
+    case Condition::Type::SIGNAL_GREATER_EQUAL:
+    {
+        auto signalResult = ReadSignalValue(condition.mSignal);
+        return signalResult.ok && signalResult.value.mValue >= condition.mValue;
+    }
     case Condition::Type::CPU_PC_EQUALS:
         return gSimCore.mCPU->GetPC() == condition.mValue;
     case Condition::Type::CPU_PC_IN_RANGE:
