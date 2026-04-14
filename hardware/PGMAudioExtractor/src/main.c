@@ -102,7 +102,7 @@ int main(void) {
         if ((now - last_log_ms) >= 2000) {
             last_log_ms = now;
             heartbeat_count++;
-            printf("heartbeat=%lu phase=%s lrclk_rate=%lu raw=%lu edges=%lu elapsed_us=%lu idle_us=%lu status=%s usb_rate=%lu valid=%u cap=%u dma_ready=0x%02lx dma_done=%lu dma_drop=%lu frame_drop=%lu chan_words=%lu stereo=%lu nonzero=%lu last_l=%d last_r=%d mounted=%u suspended=%u\r\n",
+            printf("heartbeat=%lu phase=%s lrclk_rate=%lu raw=%lu edges=%lu elapsed_us=%lu idle_us=%lu status=%s usb_rate=%lu valid=%u cap=%u dma_ready=0x%02lx dma_done=%lu dma_drop=%lu frame_drop=%lu chan_words=%lu stereo=%lu nonzero=%lu last_l=%d last_r=%d opens=%lu closes=%lu primes=%lu tx_done=%lu writes=%lu mounted=%u suspended=%u\r\n",
                    (unsigned long)heartbeat_count,
                    "capture_on",
                    (unsigned long)rate_measure_get_hz(),
@@ -123,6 +123,11 @@ int main(void) {
                    (unsigned long)serial_audio_capture_get_nonzero_sample_count(),
                    (int)serial_audio_capture_get_last_left_sample(),
                    (int)serial_audio_capture_get_last_right_sample(),
+                   (unsigned long)usb_audio_get_stream_open_count(),
+                   (unsigned long)usb_audio_get_stream_close_count(),
+                   (unsigned long)usb_audio_get_prime_count(),
+                   (unsigned long)usb_audio_get_tx_done_count(),
+                   (unsigned long)usb_audio_get_write_count(),
                    (unsigned)tud_mounted(),
                    (unsigned)tud_suspended());
         }

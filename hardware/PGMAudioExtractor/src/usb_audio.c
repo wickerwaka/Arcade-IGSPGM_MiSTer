@@ -7,6 +7,7 @@
 #include "ring_buffer.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
+#include "hardware/structs/usb.h"
 
 #ifndef PGM_AUDIO_MIN_SAMPLE_RATE
 #define PGM_AUDIO_MIN_SAMPLE_RATE 32000u
@@ -60,8 +61,14 @@ static const int16_t sine_lut[256] = {
 static bool mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_TX + 1];
 static uint8_t clock_valid;
 static uint8_t current_alt_setting;
+static bool stream_enabled;
 static uint32_t packet_frame_accumulator;
 static uint32_t sine_phase;
+static uint32_t stream_open_count;
+static uint32_t stream_close_count;
+static uint32_t prime_count;
+static uint32_t tx_done_count;
+static uint32_t write_count;
 static stereo_frame_t capture_storage[CAPTURE_RING_FRAMES];
 static stereo_ring_buffer_t capture_rb;
 static stereo_frame_t tx_packet[CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX / sizeof(stereo_frame_t)];
@@ -112,8 +119,14 @@ void usb_audio_init(void) {
     memset(mute, 0, sizeof(mute));
     clock_valid = 1;
     current_alt_setting = AUDIO_STREAMING_ALT_OFF;
+    stream_enabled = false;
     packet_frame_accumulator = 0;
     sine_phase = 0;
+    stream_open_count = 0;
+    stream_close_count = 0;
+    prime_count = 0;
+    tx_done_count = 0;
+    write_count = 0;
     stereo_ring_buffer_init(&capture_rb, capture_storage, CAPTURE_RING_FRAMES);
 }
 
@@ -133,9 +146,21 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
     (void)rhport;
     current_alt_setting = tu_u16_low(tu_le16toh(p_request->wValue));
     if (current_alt_setting == AUDIO_STREAMING_ALT_OFF) {
+        stream_enabled = false;
         packet_frame_accumulator = 0;
         sine_phase = 0;
         stereo_ring_buffer_clear(&capture_rb);
+
+    // Clear EP IN buffer control to prevent "ep was already available" panic
+    // on stream reopen. On RP2040/RP2350, TUP_DCD_EDPT_ISO_ALLOC means the
+    // ISO endpoint is never truly closed and dcd_edpt_iso_activate() does not
+    // clear buffer state, so USB_BUF_CTRL_AVAIL can persist across close/reopen.
+    usb_dpram->ep_buf_ctrl[1].in = 0;
+    } else if (current_alt_setting == AUDIO_STREAMING_ALT_PCM16) {
+        stream_open_count++;
+        stream_enabled = true;
+        packet_frame_accumulator = 0;
+        sine_phase = 0;
     }
     return true;
 }
@@ -143,10 +168,18 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
 bool tud_audio_set_itf_close_EP_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
     (void)rhport;
     (void)p_request;
+    stream_enabled = false;
     current_alt_setting = AUDIO_STREAMING_ALT_OFF;
+    stream_close_count++;
     packet_frame_accumulator = 0;
     sine_phase = 0;
     stereo_ring_buffer_clear(&capture_rb);
+
+    // Clear EP IN buffer control to prevent "ep was already available" panic
+    // on stream reopen. On RP2040/RP2350, TUP_DCD_EDPT_ISO_ALLOC means the
+    // ISO endpoint is never truly closed and dcd_edpt_iso_activate() does not
+    // clear buffer state, so USB_BUF_CTRL_AVAIL can persist across close/reopen.
+    usb_dpram->ep_buf_ctrl[1].in = 0;
     return true;
 }
 
@@ -241,12 +274,16 @@ bool tud_audio_tx_done_pre_load_cb(uint8_t rhport, uint8_t itf, uint8_t ep_in, u
     (void)itf;
     (void)ep_in;
 
-    if (cur_alt_setting != AUDIO_STREAMING_ALT_PCM16 || current_alt_setting != AUDIO_STREAMING_ALT_PCM16) {
+    if (cur_alt_setting != AUDIO_STREAMING_ALT_PCM16 || current_alt_setting != AUDIO_STREAMING_ALT_PCM16 || !tud_mounted()) {
         return true;
     }
 
+    tx_done_count++;
     uint16_t bytes = build_tx_packet(tx_packet, TU_ARRAY_SIZE(tx_packet));
-    tud_audio_write((uint8_t *)tx_packet, bytes);
+    if (bytes != 0) {
+        tud_audio_write((uint8_t *)tx_packet, bytes);
+        write_count++;
+    }
     return true;
 }
 
@@ -257,4 +294,24 @@ bool tud_audio_tx_done_post_load_cb(uint8_t rhport, uint16_t n_bytes_copied, uin
     (void)ep_in;
     (void)cur_alt_setting;
     return true;
+}
+
+uint32_t usb_audio_get_stream_open_count(void) {
+    return stream_open_count;
+}
+
+uint32_t usb_audio_get_stream_close_count(void) {
+    return stream_close_count;
+}
+
+uint32_t usb_audio_get_prime_count(void) {
+    return prime_count;
+}
+
+uint32_t usb_audio_get_tx_done_count(void) {
+    return tx_done_count;
+}
+
+uint32_t usb_audio_get_write_count(void) {
+    return write_count;
 }

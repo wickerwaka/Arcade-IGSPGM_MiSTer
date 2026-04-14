@@ -1,8 +1,5 @@
 #include <string.h>
 
-#include "bsp/board_api.h"
-#include "hardware/watchdog.h"
-#include "pico/bootrom.h"
 #include "pico/unique_id.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
@@ -73,32 +70,34 @@ enum {
 };
 
 static char const *const string_desc_arr[] = {
-    (const char[]){0x09, 0x04},
-    "wickerwaka",
-    "PGM Audio Extractor",
-    NULL,
-    "USB Audio Capture",
-    "PGM Debug Console",
-    "Reset",
+    [STRID_MANUFACTURER] = "wickerwaka",
+    [STRID_PRODUCT] = "PGM Audio Extractor",
+    [STRID_SERIAL] = NULL,
+    [STRID_AUDIO] = "USB Audio Capture",
+    [STRID_CDC] = "PGM Debug Console",
+    [STRID_RESET] = "Reset",
 };
 
 static uint16_t desc_str[32 + 1];
+static char usbd_serial_str[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
 
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     (void)langid;
     size_t chr_count;
 
+    if (!usbd_serial_str[0]) {
+        pico_get_unique_board_id_string(usbd_serial_str, sizeof(usbd_serial_str));
+    }
+
     switch (index) {
         case STRID_LANGID:
-            memcpy(&desc_str[1], string_desc_arr[0], 2);
+            desc_str[1] = 0x0409;
             chr_count = 1;
             break;
         case STRID_SERIAL: {
-            char serial[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1];
-            pico_get_unique_board_id_string(serial, sizeof(serial));
-            chr_count = strlen(serial);
+            chr_count = strlen(usbd_serial_str);
             for (size_t i = 0; i < chr_count; ++i) {
-                desc_str[1 + i] = serial[i];
+                desc_str[1 + i] = usbd_serial_str[i];
             }
             break;
         }
