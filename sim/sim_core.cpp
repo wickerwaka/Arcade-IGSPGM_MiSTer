@@ -22,7 +22,7 @@ SimCore gSimCore;
 SimCore::SimCore()
     : mVideo(nullptr), mTop(nullptr), mDDRMemory(nullptr), mSDRAM(nullptr), mContextp(nullptr), mTotalTicks(0), mTraceActive(false),
       mTraceDepth(1), mSimulationRun(false), mSimulationStep(false), mSimulationStepSize(100000), mSimulationStepVblank(false),
-      mSystemPause(false), mSimulationWpSet(false), mSimulationWpAddr(0)
+      mSystemPause(false), mSimulationWpSet(false), mSimulationWpAddr(0), mSignalWatchpointCallback()
 {
     strcpy(mTraceFilename, "sim.fst");
 
@@ -103,6 +103,13 @@ TickResult SimCore::TickOneCycle()
         return {TickStopReason::WATCHPOINT_HIT, 1};
     }
 
+    if (mSignalWatchpointCallback && mSignalWatchpointCallback())
+    {
+        mSimulationRun = false;
+        mSimulationStep = false;
+        return {TickStopReason::WATCHPOINT_HIT, 1};
+    }
+
     return {TickStopReason::COMPLETED, 1};
 }
 
@@ -170,6 +177,12 @@ void SimCore::Shutdown()
     mSDRAM.reset();
     mDDRMemory.reset();
     mVideo.reset();
+    mSignalWatchpointCallback = nullptr;
+}
+
+void SimCore::SetSignalWatchpointCallback(std::function<bool()> callback)
+{
+    mSignalWatchpointCallback = std::move(callback);
 }
 
 void SimCore::StartTrace(const char *filename, int depth)

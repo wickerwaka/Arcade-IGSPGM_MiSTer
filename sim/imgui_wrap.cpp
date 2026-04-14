@@ -73,12 +73,17 @@ bool ImguiInit(const char *title)
     iniHandler.WriteAllFn = Window::SettingsHandlerWriteAll;
     ImGui::AddSettingsHandler(&iniHandler);
 
+    return true;
+}
+
+void ImguiInitWindows()
+{
+    Window::SortWindows();
+
     for (Window *window : Window::gWindows)
     {
         window->Init();
     }
-
-    return true;
 }
 
 bool ImguiBeginFrame()
@@ -173,6 +178,21 @@ bool ImguiBeginFrame()
 uint32_t ImguiGetButtons()
 {
     return gButtons;
+}
+
+void ImguiSetButtons(uint32_t buttons)
+{
+    gButtons = buttons;
+}
+
+void ImguiSetButtonBits(uint32_t bits)
+{
+    gButtons |= bits;
+}
+
+void ImguiClearButtonBits(uint32_t bits)
+{
+    gButtons &= ~bits;
 }
 
 void ImguiEndFrame()
