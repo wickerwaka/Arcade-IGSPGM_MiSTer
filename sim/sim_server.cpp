@@ -27,6 +27,8 @@ int RunServer(SimController &controller)
         fflush(responseOut);
     }
 
+    controller.Shutdown();
+
     fclose(responseOut);
 
     return 0;
