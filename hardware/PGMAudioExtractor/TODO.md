@@ -1,17 +1,25 @@
 # TODO
 
-## Not yet implemented
+## MVP status
 
-- actual PIO/DMA capture from `CLK`, `LRCLK`, and `SI`
-- runtime LRCLK/bit-clock measurement from GPIO edges
-- exact backward-justified sample alignment
-- host validation across macOS/Linux/Windows
+Completed:
+- USB Audio Class capture device enumerates correctly
+- CDC debug console and picotool reset interface work
+- LRCLK runtime measurement is implemented and stable
+- PIO + DMA serial audio capture from `CLK`, `LRCLK`, and `SI` is implemented
+- Backward-justified capture is working for the current PGM source
+- Real silence and real program audio have been captured successfully
+- USB stream close/reopen is stable
+- Default USB sample rate now tracks the measured source rate (`33074` by default, `44100` when detected)
 
-## Planned next steps
+## Remaining work
 
-1. Implement GPIO/PIO-based LRCLK and CLK observation.
-2. Measure current sample rate from LRCLK continuously.
-3. Implement PIO + DMA capture of 16-bit stereo frames.
-4. Confirm exact LRCLK polarity and bit alignment against hardware.
-5. Feed captured frames into the USB IN path instead of silence.
-6. Tune packet sizing and clock reporting on host operating systems.
+- reduce or eliminate ring buffer frame drops under sustained capture
+- trim debug instrumentation/heartbeat logging once no longer needed
+- validate capture behavior with additional hosts/applications
+  - macOS Audacity
+  - Linux
+  - Windows
+- test more source material/games and confirm channel ordering/polarity across titles
+- consider exposing cleaner rate-switch behavior if more source rates are encountered
+- clean up build helper artifacts and document the recommended capture workflow

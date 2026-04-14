@@ -38,8 +38,7 @@ info:
 	@$(PICOTOOL) -f info || { echo "BOOTSEL PLZ?!"; exit 1; }
 
 load: uf2
-	@$(PICOTOOL) load -f $(UF2) || { echo "BOOTSEL PLZ?!"; exit 1; }
-	@${PICOTOOL} reboot -a -F
+	@$(PICOTOOL) load -x -f $(UF2) || { echo "BOOTSEL PLZ?!"; exit 1; }
 
 monitor:
 	@port='$(PORT)'; \

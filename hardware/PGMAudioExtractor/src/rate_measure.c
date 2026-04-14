@@ -12,7 +12,7 @@
 #endif
 
 #ifndef PGM_AUDIO_NOMINAL_SAMPLE_RATE
-#define PGM_AUDIO_NOMINAL_SAMPLE_RATE 44100u
+#define PGM_AUDIO_NOMINAL_SAMPLE_RATE 33074u
 #endif
 
 static uint32_t current_rate_hz;
@@ -58,6 +58,14 @@ static uint32_t clamp_rate(uint32_t hz) {
         return PGM_AUDIO_MAX_SAMPLE_RATE;
     }
     return hz;
+}
+
+static uint32_t snap_rate(uint32_t hz) {
+    // Snap to one of the two known source rates.
+    // Use 44100 only if the measured rate is close to it, otherwise 33074.
+    uint32_t diff_33074 = (hz > 33074u) ? (hz - 33074u) : (33074u - hz);
+    uint32_t diff_44100 = (hz > 44100u) ? (hz - 44100u) : (44100u - hz);
+    return (diff_44100 < diff_33074) ? 44100u : 33074u;
 }
 
 void rate_measure_init(uint32_t lrclk_gpio) {
@@ -131,8 +139,8 @@ void rate_measure_task(void) {
     }
 
     uint32_t measured_hz = (uint32_t)(((uint64_t)(snapshot_edge_count - 1u) * 1000000u) / elapsed_us);
-    raw_rate_hz = measured_hz;
-    current_rate_hz = clamp_rate(measured_hz);
+    raw_rate_hz = clamp_rate(measured_hz);
+    current_rate_hz = snap_rate(raw_rate_hz);
     current_rate_valid = true;
     current_status = RATE_MEASURE_STATUS_OK;
 }
