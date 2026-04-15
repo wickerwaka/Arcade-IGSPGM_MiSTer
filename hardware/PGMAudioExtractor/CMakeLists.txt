@@ -13,7 +13,7 @@ pico_sdk_init()
 
 add_executable(pgm_audio_extractor
     src/main.c
-    src/usb_audio.c
+    src/capture_stream.c
     src/usb_descriptors.c
     src/serial_audio_capture.c
     src/rate_measure.c

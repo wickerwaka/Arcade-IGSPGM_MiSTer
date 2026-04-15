@@ -1,27 +1,10 @@
 #include "bsp/board_api.h"
 #include "pico/stdlib.h"
-#include <stdio.h>
+#include "pico/time.h"
 #include "rate_measure.h"
 #include "serial_audio_capture.h"
+#include "capture_stream.h"
 #include "tusb.h"
-#include "usb_audio.h"
-
-static const char *rate_measure_status_name(rate_measure_status_t status) {
-    switch (status) {
-        case RATE_MEASURE_STATUS_OK:
-            return "ok";
-        case RATE_MEASURE_STATUS_WAITING_FOR_EDGES:
-            return "waiting";
-        case RATE_MEASURE_STATUS_TOO_FEW_EDGES:
-            return "few_edges";
-        case RATE_MEASURE_STATUS_IDLE_TIMEOUT:
-            return "idle";
-        case RATE_MEASURE_STATUS_ZERO_ELAPSED:
-            return "zero_elapsed";
-        default:
-            return "unknown";
-    }
-}
 
 static void led_task(void) {
     static uint32_t last_toggle_ms;
@@ -42,6 +25,65 @@ static void led_task(void) {
     }
 }
 
+static uint32_t build_capture_flags(void) {
+    uint32_t flags = 0;
+    if (rate_measure_is_valid()) {
+        flags |= PGM_CAPTURE_FLAG_RATE_VALID;
+    }
+    if (serial_audio_capture_is_running()) {
+        flags |= PGM_CAPTURE_FLAG_CAPTURE_RUNNING;
+    }
+    if (serial_audio_capture_get_dropped_dma_blocks() != 0u) {
+        flags |= PGM_CAPTURE_FLAG_DMA_DROP;
+    }
+    if (serial_audio_capture_get_dropped_audio_frames() != 0u) {
+        flags |= PGM_CAPTURE_FLAG_AUDIO_DROP;
+    }
+    if (capture_stream_get_dropped_packets() != 0u) {
+        flags |= PGM_CAPTURE_FLAG_QUEUE_DROP;
+    }
+    if (!capture_stream_connected()) {
+        flags |= PGM_CAPTURE_FLAG_NO_HOST;
+    }
+    return flags;
+}
+
+static void status_task(void) {
+    static uint32_t last_status_ms;
+    static uint32_t status_seq;
+
+    uint32_t now_ms = board_millis();
+    if ((now_ms - last_status_ms) < 1000u) {
+        return;
+    }
+    last_status_ms = now_ms;
+
+    pgm_capture_status_payload_t status = {
+        .uptime_ms = now_ms,
+        .rate_hz = rate_measure_get_hz(),
+        .raw_rate_hz = rate_measure_get_raw_hz(),
+        .edge_count = rate_measure_get_edge_count(),
+        .elapsed_us = rate_measure_get_elapsed_us(),
+        .idle_us = rate_measure_get_idle_us(),
+        .rate_status = (uint32_t)rate_measure_get_status(),
+        .ready_mask = serial_audio_capture_get_ready_mask(),
+        .processed_dma_blocks = serial_audio_capture_get_processed_dma_blocks(),
+        .dropped_dma_blocks = serial_audio_capture_get_dropped_dma_blocks(),
+        .dropped_audio_frames = serial_audio_capture_get_dropped_audio_frames(),
+        .channel_word_count = serial_audio_capture_get_channel_word_count(),
+        .stereo_frame_count = serial_audio_capture_get_stereo_frame_count(),
+        .nonzero_sample_count = serial_audio_capture_get_nonzero_sample_count(),
+        .last_left_sample = serial_audio_capture_get_last_left_sample(),
+        .last_right_sample = serial_audio_capture_get_last_right_sample(),
+        .stream_dropped_packets = capture_stream_get_dropped_packets(),
+        .stream_dropped_bytes = capture_stream_get_dropped_bytes(),
+        .stream_queue_depth = capture_stream_get_queue_depth(),
+        .reserved = 0,
+    };
+
+    capture_stream_submit_status(status_seq++, time_us_64(), build_capture_flags(), &status);
+}
+
 int main(void) {
     board_init();
 
@@ -55,8 +97,8 @@ int main(void) {
     };
 
     rate_measure_init(capture_config.lrclk_gpio);
-    usb_audio_init();
-    serial_audio_capture_init(&capture_config, usb_audio_get_capture_ring_buffer());
+    capture_stream_init();
+    serial_audio_capture_init(&capture_config);
 
     tusb_rhport_init_t dev_init = {
         .role = TUSB_ROLE_DEVICE,
@@ -68,69 +110,16 @@ int main(void) {
         board_init_after_tusb();
     }
 
-    stdio_init_all();
-
-    printf("PGMAudioExtractor starting\r\n");
-    printf("startup pins: clk=%lu lrclk=%lu si=%lu sample_edge=%s bits=%u\r\n",
-           (unsigned long)capture_config.clk_gpio,
-           (unsigned long)capture_config.lrclk_gpio,
-           (unsigned long)capture_config.si_gpio,
-           capture_config.sample_on_rising_edge ? "rising" : "falling",
-           (unsigned)capture_config.bits_per_sample);
-
-    printf("enabling capture path\r\n");
     rate_measure_enable();
     serial_audio_capture_enable();
-    printf("rate_measure enabled on LRCLK gpio %lu\r\n", (unsigned long)capture_config.lrclk_gpio);
-    printf("serial_audio_capture enabled on CLK gpio %lu, LRCLK gpio %lu, SI gpio %lu\r\n",
-           (unsigned long)capture_config.clk_gpio,
-           (unsigned long)capture_config.lrclk_gpio,
-           (unsigned long)capture_config.si_gpio);
 
     while (true) {
-        static uint32_t last_log_ms;
-        static uint32_t heartbeat_count;
-
         tud_task();
-
         rate_measure_task();
         serial_audio_capture_task();
-        usb_audio_task();
+        status_task();
+        capture_stream_task();
         led_task();
-
-        uint32_t now = board_millis();
-        if ((now - last_log_ms) >= 2000) {
-            last_log_ms = now;
-            heartbeat_count++;
-            printf("heartbeat=%lu phase=%s lrclk_rate=%lu raw=%lu edges=%lu elapsed_us=%lu idle_us=%lu status=%s usb_rate=%lu valid=%u cap=%u dma_ready=0x%02lx dma_done=%lu dma_drop=%lu frame_drop=%lu chan_words=%lu stereo=%lu nonzero=%lu last_l=%d last_r=%d opens=%lu closes=%lu primes=%lu tx_done=%lu writes=%lu mounted=%u suspended=%u\r\n",
-                   (unsigned long)heartbeat_count,
-                   "capture_on",
-                   (unsigned long)rate_measure_get_hz(),
-                   (unsigned long)rate_measure_get_raw_hz(),
-                   (unsigned long)rate_measure_get_edge_count(),
-                   (unsigned long)rate_measure_get_elapsed_us(),
-                   (unsigned long)rate_measure_get_idle_us(),
-                   rate_measure_status_name(rate_measure_get_status()),
-                   (unsigned long)usb_audio_get_current_sample_rate(),
-                   (unsigned)rate_measure_is_valid(),
-                   (unsigned)serial_audio_capture_is_running(),
-                   (unsigned long)serial_audio_capture_get_ready_mask(),
-                   (unsigned long)serial_audio_capture_get_processed_dma_blocks(),
-                   (unsigned long)serial_audio_capture_get_dropped_dma_blocks(),
-                   (unsigned long)serial_audio_capture_get_dropped_audio_frames(),
-                   (unsigned long)serial_audio_capture_get_channel_word_count(),
-                   (unsigned long)serial_audio_capture_get_stereo_frame_count(),
-                   (unsigned long)serial_audio_capture_get_nonzero_sample_count(),
-                   (int)serial_audio_capture_get_last_left_sample(),
-                   (int)serial_audio_capture_get_last_right_sample(),
-                   (unsigned long)usb_audio_get_stream_open_count(),
-                   (unsigned long)usb_audio_get_stream_close_count(),
-                   (unsigned long)usb_audio_get_prime_count(),
-                   (unsigned long)usb_audio_get_tx_done_count(),
-                   (unsigned long)usb_audio_get_write_count(),
-                   (unsigned)tud_mounted(),
-                   (unsigned)tud_suspended());
-        }
     }
 
     return 0;

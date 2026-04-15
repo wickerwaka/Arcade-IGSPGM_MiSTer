@@ -8,11 +8,12 @@ CMAKE ?= cmake
 PICOTOOL ?= picotool
 MONITOR_BAUD ?= 115200
 PORT ?=
+DURATION ?= 10
 
 AUTO_PORT = $$(ls /dev/tty.usbmodem* /dev/cu.usbmodem* /dev/tty.usbserial* /dev/cu.usbserial* /dev/tty.debug-console /dev/cu.debug-console 2>/dev/null | head -n 1)
 MONITOR_PORT = $${PORT:-$(AUTO_PORT)}
 
-.PHONY: all configure build uf2 bootsel app info load monitor clean
+.PHONY: all configure build uf2 bootsel app info load monitor capture clean
 
 all: uf2
 
@@ -55,6 +56,13 @@ monitor:
 	fi; \
 	printf 'Opening %s at %s baud\n' "$$port" "$(MONITOR_BAUD)"; \
 	exec screen $$port $(MONITOR_BAUD)
+
+capture:
+	@out='$(OUT)'; \
+	if [[ -z "$$out" ]]; then \
+		out=/tmp/pgm_capture.wav; \
+	fi; \
+	exec /usr/bin/python3 tools/capture_stream.py "$$out" --duration "$(DURATION)"
 
 clean:
 	@rm -rf $(BUILD_DIR)

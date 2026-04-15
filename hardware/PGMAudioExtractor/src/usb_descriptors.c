@@ -28,30 +28,26 @@ uint8_t const *tud_descriptor_device_cb(void) {
     return (uint8_t const *)&desc_device;
 }
 
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + CFG_TUD_AUDIO * TUD_AUDIO_MIC_STEREO_DESC_LEN + CFG_TUD_CDC * TUD_CDC_DESC_LEN + TUD_RPI_RESET_DESC_LEN)
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + CFG_TUD_CDC * TUD_CDC_DESC_LEN + TUD_RPI_RESET_DESC_LEN)
 
 #if TU_CHECK_MCU(OPT_MCU_LPC175X_6X, OPT_MCU_LPC177X_8X, OPT_MCU_LPC40XX)
-#define EPNUM_AUDIO 0x03
 #define EPNUM_CDC_NOTIF 0x84
 #define EPNUM_CDC_OUT 0x05
 #define EPNUM_CDC_IN 0x85
 #elif TU_CHECK_MCU(OPT_MCU_NRF5X)
-#define EPNUM_AUDIO 0x08
 #define EPNUM_CDC_NOTIF 0x81
 #define EPNUM_CDC_OUT 0x02
 #define EPNUM_CDC_IN 0x82
 #else
-#define EPNUM_AUDIO 0x01
-#define EPNUM_CDC_NOTIF 0x83
-#define EPNUM_CDC_OUT 0x04
-#define EPNUM_CDC_IN 0x84
+#define EPNUM_CDC_NOTIF 0x81
+#define EPNUM_CDC_OUT 0x02
+#define EPNUM_CDC_IN 0x82
 #endif
 
 uint8_t const desc_configuration[] = {
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
-    TUD_AUDIO_MIC_STEREO_DESCRIPTOR(ITF_NUM_AUDIO_CONTROL, 0x04, 0x80 | EPNUM_AUDIO, CFG_TUD_AUDIO_FUNC_1_EP_IN_SZ_MAX),
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 0x05, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
-    TUD_RPI_RESET_DESCRIPTOR(ITF_NUM_RESET, 0x06),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 0x04, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+    TUD_RPI_RESET_DESCRIPTOR(ITF_NUM_RESET, 0x05),
 };
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
@@ -64,7 +60,6 @@ enum {
     STRID_MANUFACTURER,
     STRID_PRODUCT,
     STRID_SERIAL,
-    STRID_AUDIO,
     STRID_CDC,
     STRID_RESET,
 };
@@ -73,8 +68,7 @@ static char const *const string_desc_arr[] = {
     [STRID_MANUFACTURER] = "wickerwaka",
     [STRID_PRODUCT] = "PGM Audio Extractor",
     [STRID_SERIAL] = NULL,
-    [STRID_AUDIO] = "USB Audio Capture",
-    [STRID_CDC] = "PGM Debug Console",
+    [STRID_CDC] = "PGM Capture Stream",
     [STRID_RESET] = "Reset",
 };
 

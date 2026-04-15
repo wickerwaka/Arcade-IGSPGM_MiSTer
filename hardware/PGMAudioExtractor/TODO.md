@@ -1,25 +1,22 @@
 # TODO
 
-## MVP status
+## Current state
 
-Completed:
-- USB Audio Class capture device enumerates correctly
-- CDC debug console and picotool reset interface work
-- LRCLK runtime measurement is implemented and stable
-- PIO + DMA serial audio capture from `CLK`, `LRCLK`, and `SI` is implemented
-- Backward-justified capture is working for the current PGM source
-- Real silence and real program audio have been captured successfully
-- USB stream close/reopen is stable
-- Default USB sample rate now tracks the measured source rate (`33074` by default, `44100` when detected)
+Implemented:
+- RP2350 firmware captures native stereo PCM from the PGM serial audio bus using PIO + DMA
+- LRCLK is measured at runtime and included with capture metadata
+- Captured audio is streamed over USB CDC as binary packets instead of USB Audio Class
+- Each packet includes sample data plus block sequence, frame index, timestamp, and measured rate metadata
+- Host-side Python tool can receive the stream and write WAV + JSONL metadata sidecar files
+- Firmware is resilient to missing source clock/data and to no host reading from CDC
+- picotool reset / load workflow remains available
 
 ## Remaining work
 
-- reduce or eliminate ring buffer frame drops under sustained capture
-- trim debug instrumentation/heartbeat logging once no longer needed
-- validate capture behavior with additional hosts/applications
-  - macOS Audacity
-  - Linux
-  - Windows
-- test more source material/games and confirm channel ordering/polarity across titles
-- consider exposing cleaner rate-switch behavior if more source rates are encountered
-- clean up build helper artifacts and document the recommended capture workflow
+- validate long-duration captures for packet loss / host backpressure behavior
+- verify timestamp quality and decide whether block timestamps are sufficient or need extra anchor packets
+- document the binary packet format in the README
+- optionally add a second CDC or vendor endpoint if a separate debug/control channel is desired
+- decide whether to keep or remove the older USB Audio Class codepaths from the tree
+- add host-side tools for splitting captures by detected rate changes or exporting richer metadata formats
+- test the extractor workflow on Linux and Windows
