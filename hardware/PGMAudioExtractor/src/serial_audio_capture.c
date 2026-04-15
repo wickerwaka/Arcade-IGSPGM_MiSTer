@@ -142,7 +142,6 @@ static void process_dma_block(const uint32_t *block) {
     }
 
     uint64_t frame_start = emitted_frame_index;
-    uint32_t block_seq = emitted_block_count;
     uint64_t t_us = time_us_64();
     uint32_t raw_lrclk_hz = rate_measure_get_raw_hz();
     uint32_t flags = build_capture_flags();
@@ -150,7 +149,7 @@ static void process_dma_block(const uint32_t *block) {
     emitted_frame_index += block_frame_count;
     emitted_block_count++;
 
-    capture_stream_submit_audio(block_seq, frame_start, t_us, raw_lrclk_hz, flags, block_frames, block_frame_count);
+    capture_stream_submit_audio(frame_start, t_us, raw_lrclk_hz, flags, block_frames, block_frame_count);
 }
 
 static void serial_audio_capture_dma_irq_handler(void) {

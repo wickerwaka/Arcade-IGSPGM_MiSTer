@@ -64,15 +64,13 @@ void capture_stream_init(void);
 void capture_stream_task(void);
 void capture_stream_reset(void);
 bool capture_stream_connected(void);
-void capture_stream_submit_audio(uint32_t block_seq,
-                                 uint64_t frame_start,
+void capture_stream_submit_audio(uint64_t frame_start,
                                  uint64_t t_us,
                                  uint32_t raw_lrclk_hz,
                                  uint32_t flags,
                                  const stereo_frame_t *frames,
                                  uint32_t frame_count);
-void capture_stream_submit_status(uint32_t block_seq,
-                                  uint64_t t_us,
+void capture_stream_submit_status(uint64_t t_us,
                                   uint32_t flags,
                                   const pgm_capture_status_payload_t *status);
 uint32_t capture_stream_get_dropped_packets(void);

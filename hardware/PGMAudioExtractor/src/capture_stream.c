@@ -22,6 +22,7 @@ static uint8_t queue_count;
 static bool was_connected;
 static uint32_t dropped_packets;
 static uint32_t dropped_bytes;
+static uint32_t next_packet_seq;
 
 static inline bool queue_full(void) {
     return queue_count >= CAPTURE_STREAM_PACKET_QUEUE_LEN;
@@ -97,6 +98,7 @@ void capture_stream_init(void) {
     was_connected = false;
     dropped_packets = 0;
     dropped_bytes = 0;
+    next_packet_seq = 0;
 }
 
 void capture_stream_reset(void) {
@@ -107,8 +109,7 @@ bool capture_stream_connected(void) {
     return stream_ready();
 }
 
-void capture_stream_submit_audio(uint32_t block_seq,
-                                 uint64_t frame_start,
+void capture_stream_submit_audio(uint64_t frame_start,
                                  uint64_t t_us,
                                  uint32_t raw_lrclk_hz,
                                  uint32_t flags,
@@ -130,7 +131,7 @@ void capture_stream_submit_audio(uint32_t block_seq,
         .version = PGM_CAPTURE_PROTOCOL_VERSION,
         .type = PGM_CAPTURE_PACKET_TYPE_AUDIO,
         .payload_bytes = payload_bytes,
-        .block_seq = block_seq,
+        .block_seq = next_packet_seq++,
         .frame_start = frame_start,
         .frame_count = frame_count,
         .t_us = t_us,
@@ -143,8 +144,7 @@ void capture_stream_submit_audio(uint32_t block_seq,
     queue_push_complete();
 }
 
-void capture_stream_submit_status(uint32_t block_seq,
-                                  uint64_t t_us,
+void capture_stream_submit_status(uint64_t t_us,
                                   uint32_t flags,
                                   const pgm_capture_status_payload_t *status) {
     if (!status) {
@@ -163,7 +163,7 @@ void capture_stream_submit_status(uint32_t block_seq,
         .version = PGM_CAPTURE_PROTOCOL_VERSION,
         .type = PGM_CAPTURE_PACKET_TYPE_STATUS,
         .payload_bytes = payload_bytes,
-        .block_seq = block_seq,
+        .block_seq = next_packet_seq++,
         .frame_start = 0,
         .frame_count = 0,
         .t_us = t_us,

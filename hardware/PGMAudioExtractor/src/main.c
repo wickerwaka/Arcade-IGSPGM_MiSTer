@@ -50,7 +50,6 @@ static uint32_t build_capture_flags(void) {
 
 static void status_task(void) {
     static uint32_t last_status_ms;
-    static uint32_t status_seq;
 
     uint32_t now_ms = board_millis();
     if ((now_ms - last_status_ms) < 1000u) {
@@ -81,7 +80,7 @@ static void status_task(void) {
         .reserved = 0,
     };
 
-    capture_stream_submit_status(status_seq++, time_us_64(), build_capture_flags(), &status);
+    capture_stream_submit_status(time_us_64(), build_capture_flags(), &status);
 }
 
 int main(void) {

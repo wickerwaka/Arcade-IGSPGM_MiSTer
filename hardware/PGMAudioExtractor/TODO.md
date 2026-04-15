@@ -1,22 +1,15 @@
 # TODO
 
-## Current state
-
-Implemented:
-- RP2350 firmware captures native stereo PCM from the PGM serial audio bus using PIO + DMA
-- LRCLK is measured at runtime and included with capture metadata
-- Captured audio is streamed over USB CDC as binary packets instead of USB Audio Class
-- Each packet includes sample data plus block sequence, frame index, timestamp, and measured rate metadata
-- Host-side Python tool can receive the stream and write WAV + JSONL metadata sidecar files
-- Firmware is resilient to missing source clock/data and to no host reading from CDC
-- picotool reset / load workflow remains available
-
 ## Remaining work
 
-- validate long-duration captures for packet loss / host backpressure behavior
-- verify timestamp quality and decide whether block timestamps are sufficient or need extra anchor packets
-- document the binary packet format in the README
-- optionally add a second CDC or vendor endpoint if a separate debug/control channel is desired
-- decide whether to keep or remove the older USB Audio Class codepaths from the tree
-- add host-side tools for splitting captures by detected rate changes or exporting richer metadata formats
-- test the extractor workflow on Linux and Windows
+- review whether block timestamps are sufficient or whether dedicated anchor packets would improve reconstruction
+- investigate the reported `stream_dropped_packets` status counter and decide whether it reflects only startup/no-host drops or an avoidable steady-state condition
+- consider adding a separate debug/control channel if simultaneous human-readable logging is needed
+- add optional host-side tools for splitting captures by detected rate changes or exporting alternative metadata formats
+- decide whether the shared `ring_buffer` helper should stay or be simplified now that UAC is gone
+
+## Nice to have
+
+- richer post-capture analysis and summary tooling
+- optional FLAC export on the host side
+- host-to-device control commands for future capture modes

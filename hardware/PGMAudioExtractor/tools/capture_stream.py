@@ -3,7 +3,6 @@ import argparse
 import collections
 import glob
 import json
-import os
 import signal
 import struct
 import sys
@@ -140,11 +139,14 @@ def main():
     parser.add_argument('--port', help='Serial port to use')
     parser.add_argument('--duration', type=float, default=10.0, help='Capture duration in seconds (default: 10)')
     parser.add_argument('--sample-rate', type=int, help='Override WAV sample rate metadata')
+    parser.add_argument('--summary-json', help='Optional path for summary JSON output')
+    parser.add_argument('--strict', action='store_true', help='Exit non-zero if packet/frame gaps are detected')
     args = parser.parse_args()
 
     output_path = Path(args.output)
     raw_path = output_path.with_suffix(output_path.suffix + '.raw')
     jsonl_path = output_path.with_suffix(output_path.suffix + '.jsonl')
+    summary_path = Path(args.summary_json) if args.summary_json else output_path.with_suffix(output_path.suffix + '.summary.json')
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     signal.signal(signal.SIGINT, on_signal)
@@ -162,10 +164,18 @@ def main():
     total_frames = 0
     audio_packets = 0
     status_packets = 0
-    start = time.time()
-    deadline = start + args.duration if args.duration > 0 else None
+    malformed_status_packets = 0
+    first_packet_time = None
+    first_audio_time = None
+    deadline = time.time() + args.duration if args.duration > 0 else None
     expected_block_seq = None
     expected_frame_start = None
+    block_gap_count = 0
+    frame_gap_count = 0
+    block_gap_frames = 0
+    status_drop_reports = 0
+    max_queue_depth = 0
+    latest_status = None
 
     with raw_path.open('wb') as raw_file, jsonl_path.open('w', encoding='utf-8') as jsonl:
         try:
@@ -184,25 +194,42 @@ def main():
                 if payload is None:
                     break
 
+                now = time.time()
+                if first_packet_time is None:
+                    first_packet_time = now
+
                 record = {'header': hdr}
                 if expected_block_seq is not None and hdr['block_seq'] != expected_block_seq:
+                    block_gap_count += 1
                     record['block_seq_gap'] = [expected_block_seq, hdr['block_seq']]
                 expected_block_seq = hdr['block_seq'] + 1
 
                 if hdr['type'] == TYPE_AUDIO:
+                    if first_audio_time is None:
+                        first_audio_time = now
                     audio_packets += 1
                     raw_file.write(payload)
                     total_frames += hdr['frame_count']
                     if hdr['raw_lrclk_hz']:
                         rate_counter[hdr['raw_lrclk_hz']] += hdr['frame_count']
                     if expected_frame_start is not None and hdr['frame_start'] != expected_frame_start:
+                        frame_gap_count += 1
+                        gap = hdr['frame_start'] - expected_frame_start
+                        if gap > 0:
+                            block_gap_frames += gap
                         record['frame_gap'] = [expected_frame_start, hdr['frame_start']]
                     expected_frame_start = hdr['frame_start'] + hdr['frame_count']
                 elif hdr['type'] == TYPE_STATUS:
                     status_packets += 1
                     if len(payload) == STATUS_SIZE:
-                        record['status'] = decode_status(payload)
+                        status = decode_status(payload)
+                        latest_status = status
+                        max_queue_depth = max(max_queue_depth, status['stream_queue_depth'])
+                        if status['stream_dropped_packets']:
+                            status_drop_reports += 1
+                        record['status'] = status
                     else:
+                        malformed_status_packets += 1
                         record['status_error'] = f'unexpected status payload {len(payload)}'
                 else:
                     record['unknown_payload_bytes'] = len(payload)
@@ -210,15 +237,52 @@ def main():
                 jsonl.write(json.dumps(record) + '\n')
 
                 if (audio_packets + status_packets) % 50 == 0:
-                    elapsed = max(time.time() - start, 0.001)
-                    print(f'packets={audio_packets + status_packets} audio={audio_packets} status={status_packets} frames={total_frames} rate~={final_sample_rate(rate_counter, 33074)} fps={total_frames/elapsed:.1f}', flush=True)
+                    ref = first_audio_time or first_packet_time or now
+                    elapsed = max(now - ref, 0.001)
+                    print(
+                        f'packets={audio_packets + status_packets} '
+                        f'audio={audio_packets} status={status_packets} '
+                        f'frames={total_frames} rate~={final_sample_rate(rate_counter, 33074)} '
+                        f'fps={total_frames/elapsed:.1f} gaps={frame_gap_count}/{block_gap_count}',
+                        flush=True,
+                    )
         finally:
             ser.close()
 
     sample_rate = args.sample_rate or final_sample_rate(rate_counter, 33074)
     build_wav(raw_path, output_path, sample_rate, total_frames)
-    print(f'Wrote {output_path} rate={sample_rate} frames={total_frames} audio_packets={audio_packets} status_packets={status_packets}', flush=True)
+
+    summary = {
+        'port': port,
+        'output_wav': str(output_path),
+        'output_raw': str(raw_path),
+        'output_jsonl': str(jsonl_path),
+        'sample_rate': sample_rate,
+        'frames': total_frames,
+        'audio_packets': audio_packets,
+        'status_packets': status_packets,
+        'malformed_status_packets': malformed_status_packets,
+        'block_gap_count': block_gap_count,
+        'frame_gap_count': frame_gap_count,
+        'frame_gap_frames': block_gap_frames,
+        'status_drop_reports': status_drop_reports,
+        'max_queue_depth': max_queue_depth,
+        'latest_status': latest_status,
+        'rate_histogram': dict(rate_counter),
+    }
+    summary_path.write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
+
+    print(
+        f'Wrote {output_path} rate={sample_rate} frames={total_frames} '
+        f'audio_packets={audio_packets} status_packets={status_packets} '
+        f'frame_gaps={frame_gap_count} block_gaps={block_gap_count}',
+        flush=True,
+    )
     print(f'Metadata: {jsonl_path}', flush=True)
+    print(f'Summary: {summary_path}', flush=True)
+
+    if args.strict and (block_gap_count or frame_gap_count or malformed_status_packets):
+        return 2
     return 0
 
 

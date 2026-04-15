@@ -9,6 +9,7 @@ PICOTOOL ?= picotool
 MONITOR_BAUD ?= 115200
 PORT ?=
 DURATION ?= 10
+STRICT ?=
 
 AUTO_PORT = $$(ls /dev/tty.usbmodem* /dev/cu.usbmodem* /dev/tty.usbserial* /dev/cu.usbserial* /dev/tty.debug-console /dev/cu.debug-console 2>/dev/null | head -n 1)
 MONITOR_PORT = $${PORT:-$(AUTO_PORT)}
@@ -62,7 +63,11 @@ capture:
 	if [[ -z "$$out" ]]; then \
 		out=/tmp/pgm_capture.wav; \
 	fi; \
-	exec /usr/bin/python3 tools/capture_stream.py "$$out" --duration "$(DURATION)"
+	strict=''; \
+	if [[ -n "$(STRICT)" ]]; then \
+		strict='--strict'; \
+	fi; \
+	exec /usr/bin/python3 tools/capture_stream.py "$$out" --duration "$(DURATION)" $$strict
 
 clean:
 	@rm -rf $(BUILD_DIR)
