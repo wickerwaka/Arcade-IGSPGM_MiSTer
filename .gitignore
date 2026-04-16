@@ -1,6 +1,5 @@
 output_files/
 roms/
-docs/
 build_id.v
 **/.DS_Store
 *.bak
@@ -12,3 +11,18 @@ CLAUDE.md
 sim/screenshots/
 sim/states/
 util/pgm_mame
+
+# local audio decode outputs
+out.wav
+out.wav.raw
+out.wav.jsonl
+out.wav.summary.json
+
+# KiCad / PCB local artifacts
+**/*-backups/
+**/*-cache.lib
+**/_autosave-*.kicad_prl
+**/~*.kicad_sch.lck
+**/fp-info-cache
+**/fabrication-toolkit-options.json
+**/production/

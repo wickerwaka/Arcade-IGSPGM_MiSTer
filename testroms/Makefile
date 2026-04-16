@@ -40,7 +40,7 @@ LDFLAGS = -march=68000 -static -nostdlib -g
 ifeq ($(TARGET),pgm_test)
 GAME = pgm
 CPU_ROM  = pgm_p02s.u20
-AUDIO_CPU_ROM = audio_cpu.bin
+AUDIO_CPU_ROM = # audio_cpu.bin
 DEFINES += -DGAME_PGM=1
 else
 error
@@ -59,9 +59,8 @@ $(BUILD_DIR)/cpu.bin: $(BUILD_DIR)/cpu.elf
 $(GAME_DIR)/$(CPU_ROM): $(BUILD_DIR)/cpu.bin | $(GAME_DIR)
 	cp $< $@
 
-$(GAME_DIR)/$(AUDIO_CPU_ROM): artemio/sound.asm | $(GAME_DIR)
-	$(VASM) -Fbin -nosym -chklabels -o $@ $<
-
+#$(GAME_DIR)/$(AUDIO_CPU_ROM): artemio/sound.asm | $(GAME_DIR)
+#	$(VASM) -Fbin -nosym -chklabels -o $@ $<
 
 $(BUILD_DIR)/%.o: %.c $(GLOBAL_DEPS) | $(BUILD_DIRS)
 	@echo $@
