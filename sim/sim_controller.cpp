@@ -639,6 +639,30 @@ ControllerResult<EmptyResult> SimController::StopTrace()
     return ControllerResult<EmptyResult>::Success({});
 }
 
+ControllerResult<EmptyResult> SimController::StartAudioCapture(const std::string &filename)
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return initResult;
+
+    if (!gSimCore.StartAudioCapture(filename.c_str()))
+    {
+        return ControllerResult<EmptyResult>::Failure("audio_capture_failed", "Failed to start audio capture: " + filename);
+    }
+
+    return ControllerResult<EmptyResult>::Success({});
+}
+
+ControllerResult<EmptyResult> SimController::StopAudioCapture()
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return initResult;
+
+    gSimCore.StopAudioCapture();
+    return ControllerResult<EmptyResult>::Success({});
+}
+
 ControllerResult<ScreenshotResult> SimController::SaveScreenshot(const std::string &path)
 {
     auto initResult = EnsureInitialized();

@@ -68,7 +68,8 @@ Typical session:
 2. `sim.load_game` or `sim.load_mra`
 3. optional `sim.reset`
 4. query and control methods like `sim.run_cycles`, `cpu.get_state`, `memory.read`
-5. `sim.shutdown` when finished
+5. optional `audio_capture.start` / `audio_capture.stop` when capturing simulator audio packets
+6. `sim.shutdown` when finished
 
 ## Methods
 
@@ -610,6 +611,68 @@ Result:
 {}
 ```
 
+### `audio_capture.start`
+
+Start binary audio packet capture using the same packet format documented for the hardware extractor protocol.
+
+Request:
+
+```json
+{"id":20,"method":"audio_capture.start","params":{"filename":"capture.bin"}}
+```
+
+Params:
+
+- `filename` - output file path for the captured packet stream
+
+Result:
+
+```json
+{}
+```
+
+Notes:
+
+- This replaces the old simulator CLI/environment-based capture control.
+- Capture starts immediately and continues until `audio_capture.stop` or `sim.shutdown`.
+- The output can be decoded with `utils/capture_stream.py`.
+
+### `audio_capture.stop`
+
+Stop binary audio packet capture and flush any buffered audio/status packets.
+
+Request:
+
+```json
+{"id":21,"method":"audio_capture.stop","params":{}}
+```
+
+Result:
+
+```json
+{}
+```
+
+### Audio capture workflow example
+
+Capture 120 frames of simulator audio to a binary packet stream:
+
+```text
+> {"id":1,"method":"sim.initialize","params":{"headless":true}}
+> {"id":2,"method":"sim.load_game","params":{"name":"pgm"}}
+> {"id":3,"method":"sim.reset","params":{"cycles":100}}
+> {"id":4,"method":"audio_capture.start","params":{"filename":"/tmp/pgm.bin"}}
+> {"id":5,"method":"sim.run_frames","params":{"count":120}}
+> {"id":6,"method":"audio_capture.stop","params":{}}
+> {"id":7,"method":"sim.shutdown","params":{}}
+```
+
+Decode the captured packet stream into WAV using the shared host tool:
+
+```bash
+python3 utils/capture_stream.py /tmp/pgm.wav --input /tmp/pgm.bin
+```
+
 ### `video.screenshot`
 
 Request:
@@ -675,11 +738,17 @@ Common error codes include:
 > {"id":3,"method":"sim.reset","params":{"cycles":100}}
 < {"id":3,"ok":true,"result":{}}
 
-> {"id":4,"method":"sim.run_until","params":{"condition":{"type":"signal_equals","signal":"vblank","value":1},"timeout_cycles":1000000}}
-< {"id":4,"ok":true,"result":{"reason":"condition_met","ticks_executed":447980,"frames_executed":0}}
+> {"id":4,"method":"audio_capture.start","params":{"filename":"/tmp/pgm.bin"}}
+< {"id":4,"ok":true,"result":{}}
 
-> {"id":5,"method":"cpu.get_state","params":{}}
-< {"id":5,"ok":true,"result":{"pc":256,"registers":[...],"disasm":"..."}}
+> {"id":5,"method":"sim.run_until","params":{"condition":{"type":"signal_equals","signal":"vblank","value":1},"timeout_cycles":1000000}}
+< {"id":5,"ok":true,"result":{"reason":"condition_met","ticks_executed":447980,"frames_executed":0}}
+
+> {"id":6,"method":"audio_capture.stop","params":{}}
+< {"id":6,"ok":true,"result":{}}
+
+> {"id":7,"method":"cpu.get_state","params":{}}
+< {"id":7,"ok":true,"result":{"pc":256,"registers":[...],"disasm":"..."}}
 ```
 
 ## Agent usage guidance

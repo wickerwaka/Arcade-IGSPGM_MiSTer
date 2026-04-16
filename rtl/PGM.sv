@@ -690,10 +690,13 @@ wire ics2115_cs_n, ics2115_rd_n, ics2115_wr_n;
 wire ics2115_irq, ics2115_ready;
 wire ics2115_reset_n;
 
-wire [22:0] ics2115_rom_addr;
+wire [22:0] ics2115_rom_addr /* verilator public_flat */;
 wire [15:0] ics2115_rom_q;
 wire        ics2115_rom_read;
 wire        ics2115_data_valid;
+wire signed [15:0] ics2115_audio_left;
+wire signed [15:0] ics2115_audio_right;
+wire               ics2115_audio_valid;
 
 rom_cache2 audio_romcache(
     .clk,
@@ -787,10 +790,12 @@ ics2115 ics2115(
     .rom_voice_id(),
     .rom_data_valid(ics2115_data_valid),
 
-    .audio_left(audio_out),
-    .audio_right(),
-    .audio_valid()
+    .audio_left(ics2115_audio_left),
+    .audio_right(ics2115_audio_right),
+    .audio_valid(ics2115_audio_valid)
 );
+
+assign audio_out = ics2115_audio_left;
 
 logic [15:0] io_q;
 always_comb begin

@@ -124,5 +124,5 @@ When the host is not connected or not draining the CDC stream, packets are dropp
 - `src/capture_stream.[ch]` - CDC packet queueing/transport
 - `src/rate_measure.[ch]` - LRCLK measurement logic
 - `src/ring_buffer.[ch]` - shared stereo frame type / helper ring buffer
-- `tools/capture_stream.py` - host-side capture tool
+- `../../utils/capture_stream.py` - host-side capture/decode tool for both hardware CDC streams and simulator binary packet captures
 - `tools/serial_monitor.py` - reconnecting serial monitor helper

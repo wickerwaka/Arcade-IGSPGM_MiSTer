@@ -114,4 +114,4 @@ The host should verify:
 - `frame_start` continuity across audio packets
 - absence of diagnostic drop flags when lossless capture is desired
 
-The provided `tools/capture_stream.py` receiver records packet metadata to JSONL and summarizes packet/frame gaps at the end of capture.
+The provided `utils/capture_stream.py` receiver records packet metadata to JSONL and summarizes packet/frame gaps at the end of capture. It can read either the live CDC stream from the capture hardware or a simulator-produced binary packet file.

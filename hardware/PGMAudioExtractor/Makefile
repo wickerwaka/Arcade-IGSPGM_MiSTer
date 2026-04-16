@@ -67,7 +67,7 @@ capture:
 	if [[ -n "$(STRICT)" ]]; then \
 		strict='--strict'; \
 	fi; \
-	exec /usr/bin/python3 tools/capture_stream.py "$$out" --duration "$(DURATION)" $$strict
+	exec /usr/bin/python3 ../../utils/capture_stream.py "$$out" --duration "$(DURATION)" $$strict
 
 clean:
 	@rm -rf $(BUILD_DIR)

@@ -9,6 +9,7 @@
 #include "sim_sdram.h"
 #include "sim_ddr.h"
 #include "sim_video.h"
+#include "sim_audio_capture.h"
 #include "gfx_cache.h"
 #include "m68k.h"
 
@@ -58,6 +59,7 @@ void SimCore::Init()
     mVideo = std::make_unique<SimVideo>();
 
     mGfxCache = std::make_unique<GfxCache>();
+    mAudioCapture = std::make_unique<SimAudioCapture>();
 
     SetMemory(MemoryRegion::WORK_RAM, UNIQUE_MEMORY_16B(work_ram, 128 * 1024));
     SetMemory(MemoryRegion::AUDIO_RAM, UNIQUE_MEMORY_16B(aram, 64 * 1024));
@@ -95,6 +97,14 @@ TickResult SimCore::TickOneCycle()
     mTop->eval();
     if (mTfp)
         mTfp->dump(mContextp->time());
+
+    if (mAudioCapture)
+    {
+        mAudioCapture->Tick(mTotalTicks,
+                            mTop->rootp->PGM_SIGNAL(ics2115_audio_valid) != 0,
+                            static_cast<int16_t>(mTop->rootp->PGM_SIGNAL(ics2115_audio_left)),
+                            static_cast<int16_t>(mTop->rootp->PGM_SIGNAL(ics2115_audio_right)));
+    }
 
     if (mSimulationWpSet && mTop->rootp->PGM_SIGNAL(cpu_word_addr) == mSimulationWpAddr)
     {
@@ -174,6 +184,7 @@ void SimCore::Shutdown()
     }
 
     // Reset member objects
+    mAudioCapture.reset();
     mSDRAM.reset();
     mDDRMemory.reset();
     mVideo.reset();
@@ -213,6 +224,28 @@ void SimCore::StopTrace()
         mTfp.reset();
     }
     mTraceActive = false;
+}
+
+bool SimCore::StartAudioCapture(const char *filename, uint64_t simClockHz)
+{
+    if (!mAudioCapture)
+    {
+        mAudioCapture = std::make_unique<SimAudioCapture>();
+    }
+    return mAudioCapture->Start(filename, simClockHz);
+}
+
+void SimCore::StopAudioCapture()
+{
+    if (mAudioCapture)
+    {
+        mAudioCapture->Stop();
+    }
+}
+
+bool SimCore::IsAudioCaptureActive() const
+{
+    return mAudioCapture && mAudioCapture->IsActive();
 }
 
 bool SimCore::SendIOCTLData(uint8_t index, const std::vector<uint8_t> &data)

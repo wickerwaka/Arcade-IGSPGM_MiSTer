@@ -927,6 +927,19 @@ std::string SimProtocol::HandleLine(const std::string &line)
         auto result = mController.StopTrace();
         return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
     }
+    if (method == "audio_capture.start")
+    {
+        std::string filename;
+        if (!RequireObjectField(params, "filename", field, error) || !RequireString(*field, "filename", filename, error))
+            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
+        auto result = mController.StartAudioCapture(filename);
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
+    if (method == "audio_capture.stop")
+    {
+        auto result = mController.StopAudioCapture();
+        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
+    }
     if (method == "video.screenshot")
     {
         std::string path;

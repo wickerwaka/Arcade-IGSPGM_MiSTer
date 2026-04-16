@@ -219,7 +219,7 @@ PGM pgm_inst(
     .ddr(ddr_pgm),
     
     .obj_debug_idx(obj_debug_idx),
-    
+
     .audio_out(audio_out),
     .audio_filter_en(audio_filter_en),
     

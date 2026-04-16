@@ -187,13 +187,15 @@ class SimController
 
     ControllerResult<EmptyResult> StartTrace(const std::string &filename, int depth);
     ControllerResult<EmptyResult> StopTrace();
+    ControllerResult<EmptyResult> StartAudioCapture(const std::string &filename);
+    ControllerResult<EmptyResult> StopAudioCapture();
     ControllerResult<ScreenshotResult> SaveScreenshot(const std::string &path);
 
   private:
     bool mInitialized = false;
     bool mHeadless = false;
     SimState *mStateManager = nullptr;
-    uint8_t mDipSwitchA = 1;
+    uint8_t mDipSwitchA = 0;
     uint8_t mDipSwitchB = 0;
     mutable std::unordered_map<std::string, vpiHandle> mVpiHandleCache;
 

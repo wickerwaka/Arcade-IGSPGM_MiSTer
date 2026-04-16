@@ -1,6 +1,6 @@
 ---
 name: pgm-sim-server
-description: Control the MiSTer PGM simulator through its persistent stdio JSON server. Use when you need structured simulator automation, including loading games or MRAs, running until conditions, reading CPU state, reading or writing memory, saving states, tracing, or taking screenshots.
+description: Control the MiSTer PGM simulator through its persistent stdio JSON server. Use when you need structured simulator automation, including loading games or MRAs, running until conditions, reading CPU state, reading or writing memory, saving states, tracing, taking screenshots, or starting/stopping binary audio capture.
 ---
 
 # PGM Simulator Server
@@ -66,6 +66,8 @@ Primary reference:
 - `state.load`
 - `trace.start`
 - `trace.stop`
+- `audio_capture.start`
+- `audio_capture.stop`
 - `video.screenshot`
 - `input.set_dipswitch_a`
 - `input.set_dipswitch_b`
@@ -119,5 +121,7 @@ If a request fails:
 - Responses are JSON lines on `stdout`.
 - Logs may still appear on `stderr`.
 - Keep a single long-lived simulator process per investigation when possible.
+- Use `audio_capture.start` / `audio_capture.stop` for simulator audio packet capture; do not rely on old CLI or environment-based capture control.
+- Decode simulator packet captures with `python3 utils/capture_stream.py out.wav --input capture.bin`.
 - Signal lookup first checks built-in aliases, then tries VPI hierarchical lookup.
 - Default VPI builds may expose only a subset of internal signals; use `signal.list` to inspect availability.

@@ -18,6 +18,7 @@ class SimDDR;
 class SimVideo;
 class GfxCache;
 class M68K;
+class SimAudioCapture;
 
 enum class MemoryRegion : int
 {
@@ -65,6 +66,7 @@ class SimCore
 
     std::unique_ptr<GfxCache> mGfxCache;
     std::unique_ptr<M68K> mCPU;
+    std::unique_ptr<SimAudioCapture> mAudioCapture;
 
     // Simulation state (made public for compatibility)
     uint64_t mTotalTicks;
@@ -97,6 +99,11 @@ class SimCore
     {
         return mTraceActive;
     }
+
+    // Audio capture control methods
+    bool StartAudioCapture(const char *filename, uint64_t simClockHz = 50'000'000ull);
+    void StopAudioCapture();
+    bool IsAudioCaptureActive() const;
 
     // IOCTL methods
     bool SendIOCTLData(uint8_t index, const std::vector<uint8_t> &data);

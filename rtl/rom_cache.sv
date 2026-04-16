@@ -107,9 +107,10 @@ reg [26-CACHE_WIDTH-3:0] cache_tag[2**CACHE_WIDTH];
 
 reg [63:0] cache_line;
 reg [26-CACHE_WIDTH-3:0] cached_tag;
+reg [CACHE_WIDTH-1:0] cached_index;
 
 always_comb begin
-    unique case(addr[1:0])
+    unique case(addr[2:1])
     2'b00: data = cache_line[15:0];
     2'b01: data = cache_line[31:16];
     2'b10: data = cache_line[47:32];
@@ -120,16 +121,17 @@ end
 enum { IDLE, CACHE_CHECK, SDR_WAIT } state = IDLE;
 
 reg [26:0] addr2;
-assign data_valid = tag == cached_tag;
+assign data_valid = (index == cached_index) && (tag == cached_tag);
 
 always_ff @(posedge clk) begin
-    cache_line <= cache_data[index];
-    cached_tag <= cache_tag[index];
+    cache_line   <= cache_data[index];
+    cached_tag   <= cache_tag[index];
+    cached_index <= index;
 
     if (read && state == IDLE) begin
         state <= CACHE_CHECK;
     end else if (state == CACHE_CHECK) begin
-        if (cached_tag == tag) begin
+        if ((cached_index == index) && (cached_tag == tag)) begin
             state <= IDLE;
         end else begin
             sdr_addr <= { addr[26:3], 3'b000 };
@@ -139,10 +141,11 @@ always_ff @(posedge clk) begin
         end
     end else if (state == SDR_WAIT) begin
         if (sdr_req == sdr_ack) begin
-            cache_tag[index] <= addr2[26:CACHE_WIDTH+3];
-            cache_data[index] <= sdr_data;
+            cache_tag[addr2[CACHE_WIDTH+2:3]] <= addr2[26:CACHE_WIDTH+3];
+            cache_data[addr2[CACHE_WIDTH+2:3]] <= sdr_data;
             cache_line <= sdr_data;
             cached_tag <= addr2[26:CACHE_WIDTH+3];
+            cached_index <= addr2[CACHE_WIDTH+2:3];
             state <= IDLE;
         end
     end
