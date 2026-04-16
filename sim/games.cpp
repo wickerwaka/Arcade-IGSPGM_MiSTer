@@ -42,9 +42,9 @@ static void LoadPgm()
 {
     gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", BIOS_PROG_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", BIOS_MUSIC_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }
@@ -54,9 +54,9 @@ static void LoadPgmTest()
     gFileSearch.AddSearchPath("../testroms/build/pgm_test/pgm/");
     gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", MUSIC_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_p02s.u20", BIOS_PROG_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_m01s.rom", BIOS_MUSIC_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM_TEST);
 }
@@ -66,8 +66,8 @@ static void LoadTestbios()
 {
     gFileSearch.AddSearchPath("../roms/pgm.zip");
 
-    gSimCore.mSDRAM->LoadData("testbios.bin", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("testbios.bin", BIOS_PROG_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }
@@ -79,9 +79,9 @@ static void LoadEspgalbl()
     gFileSearch.AddSearchPath("../roms/espgalbl.zip");
     gFileSearch.AddSearchPath("../roms/espgal.zip");
 
-    gSimCore.mSDRAM->LoadData("espgaluda_u8.bin", CPU_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", TILE_ROM_SDR_BASE, 1);
-    gSimCore.mSDRAM->LoadData("cave_t04801w064.u19", TILE_ROM_SDR_BASE + 0x180000, 1);
+    gSimCore.mSDRAM->LoadData("espgaluda_u8.bin", CART_PROG_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("cave_t04801w064.u19", CART_TILE_ROM_SDR_BASE, 1);
 
     gSimCore.SetGame(GAME_PGM);
 }

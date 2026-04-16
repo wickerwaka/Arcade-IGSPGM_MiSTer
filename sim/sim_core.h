@@ -22,16 +22,18 @@ class SimAudioCapture;
 
 enum class MemoryRegion : int
 {
-    BIOS_ROM,
-    PROGRAM_ROM,
+    BIOS_PROG_ROM,
+    CART_PROG_ROM,
     PALETTE_RAM,
     VIDEO_RAM,
     WORK_RAM,
     AUDIO_RAM,
-    TILE_ROM,
-    MUSIC_ROM,
-    B_ROM,
-    A_ROM,
+    BIOS_TILE_ROM,
+    BIOS_MUSIC_ROM,
+    CART_TILE_ROM,
+    CART_MUSIC_ROM,
+    CART_B_ROM,
+    CART_A_ROM,
 
     COUNT
 };

@@ -65,13 +65,16 @@ void SimCore::Init()
     SetMemory(MemoryRegion::AUDIO_RAM, UNIQUE_MEMORY_16B(aram, 64 * 1024));
     SetMemory(MemoryRegion::VIDEO_RAM, UNIQUE_MEMORY_16B(vram, 64 * 1024));
     SetMemory(MemoryRegion::PALETTE_RAM, UNIQUE_MEMORY_8B(palram, 32 * 1024));
-    SetMemory(MemoryRegion::BIOS_ROM, std::make_unique<MemorySlice>(*mSDRAM, CPU_ROM_SDR_BASE, 1024 * 1024));
-    SetMemory(MemoryRegion::TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, TILE_ROM_SDR_BASE, 16 * 1024 * 1024));
-    SetMemory(MemoryRegion::MUSIC_ROM, std::make_unique<MemorySlice>(*mSDRAM, MUSIC_ROM_SDR_BASE, 16 * 1024 * 1024));
+    SetMemory(MemoryRegion::BIOS_PROG_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_PROG_ROM_SDR_BASE, 1024 * 1024));
+    SetMemory(MemoryRegion::CART_PROG_ROM, std::make_unique<MemorySlice>(*mSDRAM, CART_PROG_ROM_SDR_BASE, 16 * 1024 * 1024));
+    SetMemory(MemoryRegion::BIOS_TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_TILE_ROM_SDR_BASE, 2 * 1024 * 1024));
+    SetMemory(MemoryRegion::BIOS_MUSIC_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_MUSIC_ROM_SDR_BASE, 2 * 1024 * 1024));
+    SetMemory(MemoryRegion::CART_TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, CART_TILE_ROM_SDR_BASE, 32 * 1024 * 1024));
+    SetMemory(MemoryRegion::CART_MUSIC_ROM, std::make_unique<MemorySlice>(*mSDRAM, CART_MUSIC_ROM_SDR_BASE, 32 * 1024 * 1024));
 
     // Initialize M68K CPU wrapper
     mCPU = std::make_unique<M68K>();
-    mCPU->MapMemory(0x00000000, 0xfe000000, Memory(MemoryRegion::BIOS_ROM));
+    mCPU->MapMemory(0x00000000, 0xfe000000, Memory(MemoryRegion::BIOS_PROG_ROM)); // TODO
 }
 
 TickResult SimCore::TickOneCycle()

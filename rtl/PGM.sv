@@ -619,7 +619,7 @@ assign green = { igs023_color[9:5], igs023_color[9:7] };
 assign blue = { igs023_color[4:0], igs023_color[4:2] };
 
 wire [23:0] igs023_sdr_addr;
-assign sdr_scn0_addr = TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr };
+assign sdr_scn0_addr = BIOS_TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr };
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
@@ -706,7 +706,7 @@ rom_cache2 audio_romcache(
     .sdr_req(sdr_audio_req),
     .sdr_ack(sdr_audio_ack),
 
-    .addr(MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr[22:0], 1'b0}),
+    .addr(BIOS_MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr[22:0], 1'b0}),
     .read(ics2115_rom_read),
     .data({ics2115_rom_q[7:0], ics2115_rom_q[15:8]}),
     .data_valid(ics2115_data_valid)

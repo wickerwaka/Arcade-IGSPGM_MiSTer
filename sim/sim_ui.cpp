@@ -607,9 +607,9 @@ class ROMWindow : public Window
         }
 
         mTabs.clear();
-        mTabs.emplace_back("BIOS", gSimCore.Memory(MemoryRegion::BIOS_ROM));
-        mTabs.emplace_back("T", gSimCore.Memory(MemoryRegion::TILE_ROM));
-        mTabs.emplace_back("Program", gSimCore.Memory(MemoryRegion::PROGRAM_ROM));
+        mTabs.emplace_back("BIOS", gSimCore.Memory(MemoryRegion::BIOS_PROG_ROM));
+        mTabs.emplace_back("T", gSimCore.Memory(MemoryRegion::BIOS_TILE_ROM));
+        mTabs.emplace_back("Program", gSimCore.Memory(MemoryRegion::CART_PROG_ROM));
     }
 
     void Draw()

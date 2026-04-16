@@ -348,11 +348,12 @@ ControllerResult<CpuState> SimController::GetCpuState() const
 ControllerResult<MemoryRegion> SimController::ParseRegion(const std::string &name) const
 {
     static const std::vector<std::pair<std::string, MemoryRegion>> kRegions = {
-        {"BIOS_ROM", MemoryRegion::BIOS_ROM},       {"PROGRAM_ROM", MemoryRegion::PROGRAM_ROM},
-        {"PALETTE_RAM", MemoryRegion::PALETTE_RAM}, {"VIDEO_RAM", MemoryRegion::VIDEO_RAM},
-        {"WORK_RAM", MemoryRegion::WORK_RAM},       {"AUDIO_RAM", MemoryRegion::AUDIO_RAM},
-        {"TILE_ROM", MemoryRegion::TILE_ROM},       {"MUSIC_ROM", MemoryRegion::MUSIC_ROM},
-        {"B_ROM", MemoryRegion::B_ROM},             {"A_ROM", MemoryRegion::A_ROM},
+        {"BIOS_PROG_ROM", MemoryRegion::BIOS_PROG_ROM}, {"CART_PROG_ROM", MemoryRegion::CART_PROG_ROM},
+        {"PALETTE_RAM", MemoryRegion::PALETTE_RAM},     {"VIDEO_RAM", MemoryRegion::VIDEO_RAM},
+        {"WORK_RAM", MemoryRegion::WORK_RAM},           {"AUDIO_RAM", MemoryRegion::AUDIO_RAM},
+        {"BIOS_TILE_ROM", MemoryRegion::BIOS_TILE_ROM}, {"BIOS_MUSIC_ROM", MemoryRegion::BIOS_MUSIC_ROM},
+        {"CART_TILE_ROM", MemoryRegion::CART_TILE_ROM}, {"CART_MUSIC_ROM", MemoryRegion::CART_MUSIC_ROM},
+        {"CART_B_ROM", MemoryRegion::CART_B_ROM},       {"CART_A_ROM", MemoryRegion::CART_A_ROM},
     };
 
     for (const auto &entry : kRegions)

@@ -15,9 +15,14 @@ enum Game : uint8_t
     GAME_INVALID = 0xff
 };
 
-static const uint32_t CPU_ROM_SDR_BASE = 0x00000000;
-static const uint32_t TILE_ROM_SDR_BASE = 0x01000000;
-static const uint32_t MUSIC_ROM_SDR_BASE = 0x02000000;
+static const uint32_t BIOS_PROG_ROM_SDR_BASE   = 0x00000000;
+static const uint32_t BIOS_TILE_ROM_SDR_BASE   = 0x00100000;
+static const uint32_t BIOS_MUSIC_ROM_SDR_BASE  = 0x00300000;
+
+static const uint32_t CART_PROG_ROM_SDR_BASE   = 0x01000000;
+static const uint32_t CART_TILE_ROM_SDR_BASE   = 0x02000000;
+static const uint32_t CART_MUSIC_ROM_SDR_BASE  = 0x04000000;
+static const uint32_t CART_B_ROM_SDR_BASE      = 0x06000000;
 
 Game GameFind(const char *name);
 const char *GameName(Game game);

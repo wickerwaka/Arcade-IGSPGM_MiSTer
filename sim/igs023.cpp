@@ -58,7 +58,7 @@ class IGS023ViewWindow : public Window
                     uint16_t palette = mLayer == 0 ? ((color + 32) * 2) : (color + 128);
                     ImGui::TableNextColumn();
                     SDL_Texture *tex = gSimCore.mGfxCache->GetTexture(
-                                MemoryRegion::TILE_ROM,
+                                MemoryRegion::BIOS_TILE_ROM,
                                 mLayer == 0 ? GfxCacheFormat::IGS023_BG : GfxCacheFormat::IGS023_FG,
                                 code,
                                 palette);
