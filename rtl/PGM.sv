@@ -68,7 +68,12 @@ module PGM(
 
     input             sync_fix,
 
-    input             pause
+    input             pause,
+
+    input             cart_present,
+    input      [23:0] cart_prog_base,
+    input      [23:0] cart_tile_base,
+    input      [23:0] cart_music_base
 );
 
 wire clk = clk_50m;
@@ -466,7 +471,6 @@ address_translator address_translator(
 
     .WORKRAMn,
     .ROMn,
-    .PROGn,
     .IOn,
     .IGS023n,
     .IGS026_Xn,
@@ -479,8 +483,7 @@ address_translator address_translator(
 assign cpu_data_in = ~SS_SAVEn ? ss_irq_handler[cpu_addr[3:0]] :
                      ~SS_RESETn ? ss_reset_vector[cpu_addr[1:0]] :
                      ~SS_VECn ? ( cpu_addr[0] ? 16'h0000 : 16'h00ff ) :
-                     ~ROMn ? rom_q :
-                     ~PROGn ? rom_q :
+                     ~ROMn ? {rom_q[7:0], rom_q[15:8]} :
                      ~WORKRAMn ? workram_q :
                      ~IGS023n ? igs023_q :
                      ~IOn ? io_q :
@@ -619,7 +622,9 @@ assign green = { igs023_color[9:5], igs023_color[9:7] };
 assign blue = { igs023_color[4:0], igs023_color[4:2] };
 
 wire [23:0] igs023_sdr_addr;
-assign sdr_scn0_addr = BIOS_TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr };
+assign sdr_scn0_addr = (cart_present && (igs023_sdr_addr >= cart_tile_base))
+                        ? CART_TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr - cart_tile_base }
+                        : BIOS_TILE_ROM_SDR_BASE[26:0] + { 3'd0, igs023_sdr_addr };
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
@@ -698,6 +703,10 @@ wire signed [15:0] ics2115_audio_left;
 wire signed [15:0] ics2115_audio_right;
 wire               ics2115_audio_valid;
 
+wire [26:0] ics2115_sdr_addr = (cart_present && ics2115_rom_addr[22:0] >= cart_music_base[23:1])
+                               ? CART_MUSIC_ROM_SDR_BASE + { 3'b0, ics2115_rom_addr[22:0] - cart_music_base[23:1], 1'b0 }
+                               : BIOS_MUSIC_ROM_SDR_BASE + { 3'b0, ics2115_rom_addr[22:0], 1'b0 };
+
 rom_cache2 audio_romcache(
     .clk,
 
@@ -706,7 +715,7 @@ rom_cache2 audio_romcache(
     .sdr_req(sdr_audio_req),
     .sdr_ack(sdr_audio_ack),
 
-    .addr(BIOS_MUSIC_ROM_SDR_BASE + {3'b0, ics2115_rom_addr[22:0], 1'b0}),
+    .addr(ics2115_sdr_addr),
     .read(ics2115_rom_read),
     .data({ics2115_rom_q[7:0], ics2115_rom_q[15:8]}),
     .data_valid(ics2115_data_valid)
@@ -824,7 +833,8 @@ rom_cache rom_cache(
     .sdr_req(sdr_cpu_req),
     .sdr_ack(sdr_cpu_ack),
 
-    .extra_rom_n(1),
+    .cart_present,
+    .cart_base_addr(cart_prog_base[23:1]),
 
     .as_n(ROMn | cpu_as_n),
     .dtack_n(sdr_dtack_n),

@@ -169,18 +169,28 @@ ControllerResult<EmptyResult> SimController::LoadGame(const std::string &name)
     if (!initResult.ok)
         return initResult;
 
-    Game game = GameFind(name.c_str());
-    if (game == GAME_INVALID)
+    if (GameIsPgmFilePath(name.c_str()))
     {
-        return ControllerResult<EmptyResult>::Failure("unknown_game", "Unknown game: " + name);
+        if (!GameInitPgmFile(name.c_str()))
+        {
+            return ControllerResult<EmptyResult>::Failure("load_failed", "Failed to load PGM file: " + name);
+        }
+    }
+    else
+    {
+        Game game = GameFind(name.c_str());
+        if (game == GAME_INVALID)
+        {
+            return ControllerResult<EmptyResult>::Failure("unknown_game", "Unknown game: " + name);
+        }
+
+        if (!GameInit(game))
+        {
+            return ControllerResult<EmptyResult>::Failure("load_failed", "Failed to load game: " + name);
+        }
     }
 
-    if (!GameInit(game))
-    {
-        return ControllerResult<EmptyResult>::Failure("load_failed", "Failed to load game: " + name);
-    }
-
-    mStateManager->SetGameName(name.c_str());
+    mStateManager->SetGameName(GameLoadedShortName());
     gSimCore.mTop->dswa = mDipSwitchA;
     gSimCore.mTop->dswb = mDipSwitchB;
     return ControllerResult<EmptyResult>::Success({});

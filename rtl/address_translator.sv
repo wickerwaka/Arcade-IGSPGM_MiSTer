@@ -8,7 +8,6 @@ module address_translator(
     input        ss_override,
 
     output logic ROMn,
-    output logic PROGn,
     output logic WORKRAMn,
     output logic IGS023n,
     output logic IGS026_Xn,
@@ -29,7 +28,6 @@ endfunction
 
 always_comb begin
     ROMn = 1;
-    PROGn = 1;
     WORKRAMn = 1;
     IGS023n = 1;
     IGS026_Xn = 1;

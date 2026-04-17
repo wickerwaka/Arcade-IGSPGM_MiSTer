@@ -17,11 +17,11 @@
 	</switches>
 	<rom index="0" download="0x30000000" zip="pgm.zip">
 		<part>00 00</part>
-		<part>00020000</part>
+		<part>00 00020000 00000000</part>
 		<part name="pgm_p02s.u20"/>
-		<part>01200000</part>
+		<part>01 00200000 00000000</part>
 		<part name="pgm_t01s.rom"/>
-		<part>02200000</part>
+		<part>02 00200000 00000000</part>
 		<part name="pgm_m01s.rom"/>
 	</rom>
 </misterromdescription>

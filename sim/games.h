@@ -26,8 +26,11 @@ static const uint32_t CART_B_ROM_SDR_BASE      = 0x06000000;
 
 Game GameFind(const char *name);
 const char *GameName(Game game);
+const char *GameLoadedShortName();
+bool GameIsPgmFilePath(const char *name);
 
 bool GameInit(Game game);
+bool GameInitPgmFile(const char *path);
 bool GameInitMra(const char *mraPath);
 
 #endif // GAMES_H

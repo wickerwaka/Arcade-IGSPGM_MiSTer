@@ -52,7 +52,7 @@ module sim_top(
     input             ioctl_download,
     input       [7:0] ioctl_index,
     input             ioctl_wr,
-    input      [24:0] ioctl_addr,
+    input      [26:0] ioctl_addr,
     input       [7:0] ioctl_dout,
     output            ioctl_wait,
 
@@ -116,12 +116,20 @@ wire rom_data_wait;
 wire rom_data_strobe;
 wire [7:0] rom_data;
 
+wire rom_set_map_base;
+wire [3:0] rom_base_idx;
+wire [31:0] rom_map_base;
+
 wire [23:0] bram_addr;
 wire  [7:0] bram_data;
 wire        bram_wr;
 
 board_cfg_t board_cfg;
 
+reg cart_present /* verilator public_flat */;
+reg [23:0] cart_tile_base /* verilator public_flat */;
+reg [23:0] cart_prog_base /* verilator public_flat */;
+reg [23:0] cart_music_base /* verilator public_flat */;
 
 ddr_rom_loader_adaptor ddr_rom_loader(
     .clk(clk),
@@ -162,9 +170,40 @@ rom_loader rom_loader(
     .bram_data(bram_data),
     .bram_wr(bram_wr),
 
-    .board_cfg(board_cfg)
+    .board_cfg(board_cfg),
+
+    .set_map_base(rom_set_map_base),
+    .map_base(rom_map_base),
+    .base_idx(rom_base_idx)
 );
 
+reg prev_rom_load_busy;
+
+always_ff @(posedge clk) begin
+    prev_rom_load_busy <= rom_load_busy;
+
+    if (rom_load_busy & ~prev_rom_load_busy) begin
+        cart_present <= 0;
+    end
+
+    if (rom_set_map_base) begin
+        case (rom_base_idx)
+            1: begin
+                cart_prog_base <= rom_map_base[23:0];
+                cart_present <= 1;
+            end
+            2: begin
+                cart_tile_base <= rom_map_base[23:0];
+                cart_present <= 1;
+            end
+            3: begin
+                cart_music_base <= rom_map_base[23:0];
+                cart_present <= 1;
+            end
+            default: begin end
+        endcase
+    end
+end
 
 // Instantiate the PGM module
 PGM pgm_inst(
@@ -215,6 +254,11 @@ PGM pgm_inst(
     .sdr_audio_q(sdr_audio_q),
     .sdr_audio_req(sdr_audio_req),
     .sdr_audio_ack(sdr_audio_ack),
+
+    .cart_present,
+    .cart_prog_base,
+    .cart_tile_base,
+    .cart_music_base,
     
     .ddr(ddr_pgm),
     

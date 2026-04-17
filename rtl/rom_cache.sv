@@ -9,7 +9,8 @@ module rom_cache(
     output reg          sdr_req,
     input               sdr_ack,
 
-    input               extra_rom_n,
+    input               cart_present,
+    input  [22:0]       cart_base_addr,
 
     input               as_n,
     output              dtack_n,
@@ -60,8 +61,8 @@ always_ff @(posedge clk) begin
             if (cached_tag == tag) begin
                 state <= READY;
             end else begin
-                if (~extra_rom_n) begin
-                    sdr_addr <= CART_PROG_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2], 3'b000 };
+                if (cart_present && (cpu_addr >= cart_base_addr)) begin
+                    sdr_addr <= CART_PROG_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2] - cart_base_addr[22:2], 3'b000 };
                 end else begin
                     sdr_addr <= BIOS_PROG_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2], 3'b000 };
                 end

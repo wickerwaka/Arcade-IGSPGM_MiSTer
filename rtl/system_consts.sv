@@ -43,23 +43,25 @@ package system_consts;
     } region_storage_t;
 
     typedef enum bit [3:0] {
-        ENCODING_NORMAL
+        ENCODING_NORMAL,
+        ENCODING_SWAP16
     } region_encoding_t;
 
     typedef struct packed {
         bit [31:0] base_addr;
         region_storage_t storage;
         region_encoding_t encoding;
+        bit [3:0]  base_idx;
     } region_t;
 
-    parameter region_t REGION_BIOS_PROG_ROM      = '{ base_addr:BIOS_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_BIOS_TILE_ROM      = '{ base_addr:BIOS_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_BIOS_MUSIC_ROM     = '{ base_addr:BIOS_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_CART_PROG_ROM      = '{ base_addr:CART_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_CART_TILE_ROM      = '{ base_addr:CART_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_CART_MUSIC_ROM     = '{ base_addr:CART_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_CART_A_ROM         = '{ base_addr:CART_A_ROM_DDR_BASE,         storage:STORAGE_DDR,   encoding:ENCODING_NORMAL };
-    parameter region_t REGION_CART_B_ROM         = '{ base_addr:CART_B_ROM_SDR_BASE,         storage:STORAGE_SDR,   encoding:ENCODING_NORMAL };
+    parameter region_t REGION_BIOS_PROG_ROM      = '{ base_addr:BIOS_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_SWAP16, base_idx:0 };
+    parameter region_t REGION_BIOS_TILE_ROM      = '{ base_addr:BIOS_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0 };
+    parameter region_t REGION_BIOS_MUSIC_ROM     = '{ base_addr:BIOS_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0  };
+    parameter region_t REGION_CART_PROG_ROM      = '{ base_addr:CART_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_SWAP16, base_idx:1  };
+    parameter region_t REGION_CART_TILE_ROM      = '{ base_addr:CART_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:2  };
+    parameter region_t REGION_CART_MUSIC_ROM     = '{ base_addr:CART_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:3  };
+    parameter region_t REGION_CART_A_ROM         = '{ base_addr:CART_A_ROM_DDR_BASE,         storage:STORAGE_DDR,   encoding:ENCODING_NORMAL, base_idx:0  };
+    parameter region_t REGION_CART_B_ROM         = '{ base_addr:CART_B_ROM_SDR_BASE,         storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0  };
 
     parameter region_t LOAD_REGIONS[8] = '{
         REGION_BIOS_PROG_ROM,

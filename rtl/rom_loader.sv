@@ -38,28 +38,37 @@ module rom_loader
 
     ddr_if.to_host ddr,
 
-    output [23:0] bram_addr,
-    output [7:0] bram_data,
-    output bram_wr,
+    output reg [23:0] bram_addr,
+    output reg [7:0] bram_data,
+    output reg bram_wr,
 
-    output board_cfg_t board_cfg
+    output board_cfg_t board_cfg,
+
+    output reg  [3:0] base_idx,
+    output reg [31:0] map_base,
+    output reg        set_map_base
 );
 
 
 reg [31:0] base_addr;
 reg reorder_64;
-reg [24:0] offset;
-reg [23:0] size;
+reg [31:0] offset;
+reg [31:0] size;
 region_encoding_t encoding;
 region_storage_t storage;
 
-typedef enum {
+typedef enum logic [4:0] {
     BOARD_CFG_0,
     BOARD_CFG_1,
     REGION_IDX,
     SIZE_0,
     SIZE_1,
     SIZE_2,
+    SIZE_3,
+    BASE_0,
+    BASE_1,
+    BASE_2,
+    BASE_3,
     SDR_DATA,
     SDR_DATA_WAIT,
     DDR_DATA,
@@ -72,8 +81,6 @@ stage_t stage = BOARD_CFG_0;
 
 int region = 0;
 
-reg write_rq = 0;
-reg write_ack = 0;
 reg [7:0] bc0;
 
 reg [63:0] ddr_buffer;
@@ -85,6 +92,7 @@ assign ddr.byteenable = 8'hff;
 always @(posedge sys_clk) begin
     bram_wr <= 0;
     ddr.acquire <= 0;
+    set_map_base <= 0;
 
     case (stage)
         BOARD_CFG_0: if (ioctl_wr) begin
@@ -95,35 +103,38 @@ always @(posedge sys_clk) begin
             board_cfg <= board_cfg_t'({bc0, ioctl_data});
             stage <= REGION_IDX;
         end
-        REGION_IDX: if (ioctl_wr) begin
-            if (ioctl_data == 8'hff) region <= region + 1;
-            else region <= int'(ioctl_data[3:0]);
-            stage <= SIZE_0;
-        end
-        SIZE_0: if (ioctl_wr) begin size[23:16] <= ioctl_data; stage <= SIZE_1; end
-        SIZE_1: if (ioctl_wr) begin size[15:8] <= ioctl_data; stage <= SIZE_2; end
-        SIZE_2: if (ioctl_wr) begin
-            size[7:0] <= ioctl_data;
+        REGION_IDX: if (ioctl_wr) begin region <= int'(ioctl_data[7:0]); stage <= SIZE_0; end
+        SIZE_0: if (ioctl_wr) begin 
+            size[31:24] <= ioctl_data; stage <= SIZE_1;
+            base_idx <= LOAD_REGIONS[region].base_idx;
             base_addr <= LOAD_REGIONS[region].base_addr;
             storage <= LOAD_REGIONS[region].storage;
             encoding <= LOAD_REGIONS[region].encoding;
-            offset <= 25'd0;
+        end
+        SIZE_1: if (ioctl_wr) begin size[23:16] <= ioctl_data; stage <= SIZE_2; end
+        SIZE_2: if (ioctl_wr) begin size[15:8] <= ioctl_data; stage <= SIZE_3; end
+        SIZE_3: if (ioctl_wr) begin size[7:0] <= ioctl_data; stage <= BASE_0; end
+        BASE_0: if (ioctl_wr) begin map_base[31:24] <= ioctl_data; stage <= BASE_1; end
+        BASE_1: if (ioctl_wr) begin map_base[23:16] <= ioctl_data; stage <= BASE_2; end
+        BASE_2: if (ioctl_wr) begin map_base[15:8] <= ioctl_data; stage <= BASE_3; end
+        BASE_3: if (ioctl_wr) begin 
+            map_base[7:0] <= ioctl_data;
+            set_map_base <= 1;
+            offset <= 0;
 
-            if ({size[23:8], ioctl_data} == 24'd0)
-                stage <= REGION_IDX;
-            else if (LOAD_REGIONS[region].storage == STORAGE_SDR)
+            if (storage == STORAGE_SDR)
                 stage <= SDR_DATA;
-            else if (LOAD_REGIONS[region].storage == STORAGE_DDR)
+            else if (storage == STORAGE_DDR)
                 stage <= DDR_DATA;
             else
                 stage <= BRAM_DATA;
         end
         SDR_DATA: if (ioctl_wr) begin
             sdr_buffer[7:0] <= ioctl_data;
-            offset <= offset + 25'd1;
+            offset <= offset + 1;
             if (offset[0] == 1'b1) begin
-                sdr_addr <= { base_addr[26:0] + {2'b0, offset[24:1], 1'b0} };
-                sdr_data <= {ioctl_data, sdr_buffer[7:0]};
+                sdr_addr <= { base_addr[26:0] + {offset[26:1], 1'b0} };
+                sdr_data <= (encoding == ENCODING_SWAP16) ? { sdr_buffer[7:0], ioctl_data } : {ioctl_data, sdr_buffer[7:0]};
                 sdr_be <= 2'b11;
                 sdr_rw <= 0; // write
                 sdr_req <= ~sdr_req;
@@ -136,18 +147,18 @@ always @(posedge sys_clk) begin
             if (sdr_req == sdr_ack) begin
                 ioctl_wait <= 0;
                 sdr_rw <= 1;
-                if (offset >= 25'(size))
+                if (offset >= size)
                     stage <= REGION_IDX;
                 else
                     stage <= SDR_DATA;
             end
         end
-        DDR_DATA: if (ioctl_wr) begin
+        DDR_DATA: if (ioctl_wr) begin // FIXME: SWAP16
             ddr_buffer[55:0] <= ddr_buffer[63:8];
             ddr_buffer[63:56] <= ioctl_data;
-            offset <= offset + 25'd1;
+            offset <= offset + 1;
             if (offset[2:0] == 3'b111) begin
-                ddr.addr <= base_addr[31:0] + { 7'd0, offset[24:3], 3'd0 };
+                ddr.addr <= base_addr[31:0] + { 5'd0, offset[26:3], 3'd0 };
                 ddr.write <= 0;
                 ddr.acquire <= 1;
                 ioctl_wait <= 1;
@@ -167,7 +178,7 @@ always @(posedge sys_clk) begin
             if (~ddr.busy) begin
                 ddr.write <= 0;
                 ioctl_wait <= 0;
-                if (offset >= 25'(size))
+                if (offset >= size)
                     stage <= REGION_IDX;
                 else
                     stage <= DDR_DATA;
@@ -177,7 +188,7 @@ always @(posedge sys_clk) begin
             bram_addr <= base_addr[23:0] + offset[23:0];
             bram_data <= ioctl_data;
             bram_wr <= 1;
-            offset <= offset + 25'd1;
+            offset <= offset + 1;
 
             if (offset == ( size - 1)) stage <= REGION_IDX;
         end
@@ -196,7 +207,7 @@ module ddr_rom_loader_adaptor #(
 
     // HPS ioctl interface
     input ioctl_download,
-    input [24:0] ioctl_addr,
+    input [26:0] ioctl_addr,
     input [7:0] ioctl_index,
     input ioctl_wr,
     input [7:0] ioctl_data,
@@ -229,9 +240,8 @@ state_t state = IDLE;
 reg prev_download = 0;
 reg wr_detected = 0;
 
-reg active = 0;
-reg [24:0] length;
-reg [24:0] offset;
+reg [26:0] length;
+reg [26:0] offset;
 
 reg [63:0] buffer;
 
