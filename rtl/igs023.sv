@@ -173,10 +173,7 @@ assign vblank = vcnt < 38;
 
 
 always @(posedge clk) begin
-    if (reset) begin
-        hcnt <= 0;
-        vcnt <= 0;
-    end else if (ce_pixel) begin
+    if (ce_pixel) begin
         hcnt <= hcnt + 1;
 
         if (hcnt == 639) begin
