@@ -157,6 +157,17 @@ bool gui_bits16(const char *label, uint16_t *value)
     return pressed;
 }
 
+bool gui_bits16_func(const char *label, u16 (*getter)(), void (*setter)(u16))
+{
+    u16 value = getter();
+    if (gui_bits16(label, &value))
+    {
+        setter(value);
+        return true;
+    }
+    return false;
+}
+
 bool gui_u16(const char *label, uint16_t *value)
 {
     bool pressed = false;
@@ -185,6 +196,17 @@ bool gui_u16(const char *label, uint16_t *value)
 
     end_element();
     return pressed;
+}
+
+bool gui_u16_func(const char *label, u16 (*getter)(), void (*setter)(u16))
+{
+    u16 value = getter();
+    if (gui_u16(label, &value))
+    {
+        setter(value);
+        return true;
+    }
+    return false;
 }
 
 bool gui_u8(const char *label, u8 *value, u8 min, u8 max)
@@ -218,9 +240,6 @@ bool gui_u8(const char *label, u8 *value, u8 min, u8 max)
     end_element();
     return pressed;
 }
-
-
-
 
 void gui_end()
 {

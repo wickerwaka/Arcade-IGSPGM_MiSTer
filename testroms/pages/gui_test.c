@@ -28,14 +28,14 @@ static void update()
     gui_begin(3, 3);
 
     gui_button("BUTTON 1");
-    gui_bits16("CTRL", (u16 *)IGS023_CTRL);
+    gui_bits16_func("CTRL", IGS023_CTRL_GET, IGS023_CTRL_SET);
     gui_toggle("TOGGLE 1", &toggle1);
     if( toggle1 )
         gui_button("BUTTON 3");
     gui_button("BUTTON 4");
     
     text_cursor(1, 16);
-    textf("SCANLINE: %03X", *IGS023_SCANLINE);
+    textf("SCANLINE: %03X", IGS023_SCANLINE_GET());
 
     frame_count++;
 }

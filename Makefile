@@ -62,7 +62,7 @@ sim/%:
 	$(MAKE) -j8 -C sim run GAME=$*
 
 
-debug: debug/pgm
+debug: debug/pgm_test
 
 debug/%:
 	$(MAKE) -j8 -C testroms debug TARGET=$*

@@ -22,7 +22,7 @@ static void init()
 
 static void update()
 {
-    *IGS023_CTRL |= IGS023_CTRL_DMA;
+    IGS023_CTRL_OR(IGS023_CTRL_DMA);
     for( int i = 0; i < 32; i++ )
         IGS023_ZOOM[i] = 0x5555;
 
@@ -59,12 +59,10 @@ static void update()
     spr->unk2 = 0;
     spr->width = 0;
     spr->height = 0;
-   
-    *IGS023_CTRL |= IGS023_CTRL_DMA;
+    
+    IGS023_CTRL_OR(IGS023_CTRL_DMA);
 
     gui_begin(3, 4);
-    gui_bits16("ZOOM 0", &zoom[0]);
-    gui_bits16("ZOOM 1", &zoom[1]);
     gui_end();
 }
 

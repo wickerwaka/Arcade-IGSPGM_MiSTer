@@ -24,7 +24,6 @@ static void sym_at(u16 code, u8 x, u8 y, u8 color)
 
 
 static u16 attrib = 0;
-static u16 fg_x, fg_y;
 
 static void init()
 {
@@ -32,8 +31,8 @@ static void init()
     text_reset();
     set_default_palette();
 
-    *IGS023_FG_X = fg_x = 8;
-    *IGS023_FG_Y = fg_y = 8;
+    IGS023_FG_X_SET(8);
+    IGS023_FG_Y_SET(8);
 
     block_at(0, 1, 4);
     block_at(1, 0, 4);
@@ -64,15 +63,12 @@ static void update()
     textf("VBL: %05X\n", igs023_get_vblank_count());
 
     gui_begin(3, 5);
-    gui_bits16("CTRL", (u16 *)IGS023_CTRL);
-    gui_bits16("UNK1", (u16 *)IGS023_UNK1);
+    gui_bits16_func("CTRL", IGS023_CTRL_GET, IGS023_CTRL_SET);
+    gui_bits16_func("BG_CTRL", IGS023_BG_CTRL_GET, IGS023_BG_CTRL_SET);
     gui_bits16("ATTRIB", &attrib);
-    gui_u16("X", &fg_x);
-    gui_u16("Y", &fg_y);
+    gui_u16_func("X", IGS023_FG_X_GET, IGS023_FG_X_SET);
+    gui_u16_func("Y", IGS023_FG_Y_GET, IGS023_FG_Y_SET);
     gui_end();
-
-    *IGS023_FG_X = fg_x;
-    *IGS023_FG_Y = fg_y;
 
     text_cursor(4, 12);
     text("FFFFFFFFFF");

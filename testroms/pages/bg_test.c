@@ -15,7 +15,6 @@ static void sym_at(u16 code, u8 x, u8 y, u8 color)
     tile->color = color;
 }
 
-static u16 bg_x, bg_y;
 static u8 sx, sy;
 static u16 attrib = 0;
 static IGS023Tile *tile;
@@ -27,12 +26,17 @@ static void init()
     igs023_init();
     text_reset();
     set_default_palette();
-    
+   
+    memset(VRAM->unused1, 0xffff, sizeof(VRAM->unused1));
+    memset(VRAM->unused2, 0xffff, sizeof(VRAM->unused2));
+
     memset(VRAM->bg, 0, sizeof(VRAM->bg));
     memset(VRAM->bg_scroll, 0, sizeof(VRAM->bg_scroll));
+    
+    memset(PALRAM->unused, 0xffff, sizeof(PALRAM->unused));
 
-    *IGS023_BG_X = bg_x = 8;
-    *IGS023_BG_Y = bg_y = 8;
+    IGS023_BG_X_SET(8);
+    IGS023_BG_Y_SET(8);
 
     memset(zoom_table, 0, sizeof(zoom_table));
     for (int i = 0; i < 32; i++)
@@ -68,19 +72,15 @@ static void update()
     textf("VBL: %05X\n", igs023_get_vblank_count());
 
     gui_begin(3, 5);
-    gui_bits16("CTRL", (u16 *)IGS023_CTRL);
-    gui_bits16("UNK1", (u16 *)IGS023_UNK1);
+    gui_bits16_func("CTRL", IGS023_CTRL_GET, IGS023_CTRL_SET);
+    gui_bits16_func("BG_CTRL", IGS023_BG_CTRL_GET, IGS023_BG_CTRL_SET);
     gui_u8("ZIDX", &zoom_index, 0, 0x1f);
     if (gui_bits16("ZOOM", &zoom_table[zoom_index])) IGS023_ZOOM[zoom_index] = zoom_table[zoom_index];
-    gui_u16("X", &bg_x);
-    gui_u16("Y", &bg_y);
-    if (gui_u8("SX", &sx, 0, 0x1f)) *IGS023_UNK1 = ( *IGS023_UNK1 & 0xffe0 ) | ( sx & 0x1f );
-    if (gui_u8("SY", &sy, 0, 0x1f)) *IGS023_UNK1 = ( *IGS023_UNK1 & 0xfc1f ) | (( sy & 0x1f ) << 5);
+    gui_u16_func("X", IGS023_BG_X_GET, IGS023_BG_X_SET);
+    gui_u16_func("Y", IGS023_BG_Y_GET, IGS023_BG_Y_SET);
+    if (gui_u8("SX", &sx, 0, 0x1f)) IGS023_BG_CTRL_SET(( IGS023_BG_CTRL_GET() & 0xffe0 ) | ( sx & 0x1f ));
+    if (gui_u8("SY", &sy, 0, 0x1f)) IGS023_BG_CTRL_SET(( IGS023_BG_CTRL_GET() & 0xfc1f ) | (( sy & 0x1f ) << 5));
     gui_end();
-
-    *IGS023_BG_X = bg_x;
-    *IGS023_BG_Y = bg_y;
-
 }
 
 PAGE_REGISTER(bg_test, init, update, NULL);

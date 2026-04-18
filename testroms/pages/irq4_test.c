@@ -58,7 +58,7 @@ static void update()
         igs023_enable_irq4(false);
         PALRAM->fg[8 * 16] = 0x0000;
         toggle = false;
-        while(*IGS023_SCANLINE != 100) {}
+        while(IGS023_SCANLINE_GET() != 100) {}
         igs023_enable_irq4(true);
     }
     else

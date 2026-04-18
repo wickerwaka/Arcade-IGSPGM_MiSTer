@@ -36,8 +36,8 @@ static void update()
     text("XXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
 
     int x = 0;
-    while(*IGS023_SCANLINE < 100) {}
-    while(*IGS023_SCANLINE < 120)
+    while(IGS023_SCANLINE_GET() < 100) {}
+    while(IGS023_SCANLINE_GET() < 120)
     {
         //VRAM->bg[x].code = 0xffff;
         PALRAM->fg[x] = 0xffff;

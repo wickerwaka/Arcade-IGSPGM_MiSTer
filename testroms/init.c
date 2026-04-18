@@ -18,7 +18,7 @@ typedef void (*ctor_func_ptr)(void);
 extern ctor_func_ptr _sctors[0], _ectors[0];
 
 /* Forward define main */
-int main(void);
+int main(int argc, char *argv[]);
 
 static void reset_handler(void)
 {
@@ -55,7 +55,7 @@ static void reset_handler(void)
     }
 
     /* Branch to main function */
-    main();
+    main(0, NULL);
 
     /* Infinite loop */
     while (1);

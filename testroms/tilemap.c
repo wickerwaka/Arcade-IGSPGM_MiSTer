@@ -6,6 +6,7 @@
 #include "tilemap.h"
 #include "memory_map.h"
 #include "util.h"
+#include "igs023.h"
 
 uint16_t cur_x, cur_y;
 uint16_t cur_color;
@@ -116,7 +117,7 @@ void text_reset()
 {
     memset(VRAM->fg, 0, sizeof(VRAM->fg));
 
-    *IGS023_FG_X = 0;
-    *IGS023_FG_Y = 0;
+    IGS023_FG_X_SET(0);
+    IGS023_FG_Y_SET(0);
 }
 

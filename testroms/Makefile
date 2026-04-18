@@ -13,10 +13,10 @@ SRCS += interrupts_default.c comms.c tilemap.c input.c color.c printf/printf.c
 
 SRCS += pages/system_basics.c
 SRCS += pages/gui_test.c
-SRCS += pages/sprite_test.c
 SRCS += pages/fg_test.c
 SRCS += pages/bg_test.c
 SRCS += pages/irq4_test.c
+SRCS += pages/sprite_test.c
 
 BUILD_DIR = build/$(TARGET)
 ROM_DIR = ../roms
