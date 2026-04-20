@@ -23,9 +23,9 @@ class IGS023ViewWindow : public Window
 
     uint16_t MemWord(uint32_t addr)
     {
-        addr = (addr & 0xffff) >> 1;
-        uint8_t high = G_PGM_SIGNAL(vram, ram_h)[addr];
-        uint8_t low = G_PGM_SIGNAL(vram, ram_l)[addr];
+        addr = (addr & 0xfffe);
+        uint8_t high = G_PGM_SIGNAL(vram, ram)[addr + 1];
+        uint8_t low = G_PGM_SIGNAL(vram, ram)[addr];
 
         return (high << 8) | low;
     }

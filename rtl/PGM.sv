@@ -551,69 +551,69 @@ m68k_ram_ss_adaptor #(.WIDTHAD(15), .SS_IDX(SSIDX_Z80_RAM)) aram_ss(
 );
 
 
-wire [14:0] vram_addr;
-wire vram_lds_n, vram_uds_n;
-wire [15:0] vram_data;
-
-wire [15:0] igs023_vram_addr;
-wire [15:0] igs023_q, igs023_vram_data, igs023_vram_q;
-wire igs023_vram_we_l_n, igs023_vram_we_u_n;
-
-wire [14:0] igs023_pal_addr;
-wire [7:0] igs023_pal_q, igs023_pal_data;
-wire igs023_pal_we_n;
-
 wire [14:0] pal_addr;
-wire [7:0] pal_data;
-wire       pal_wren;
+wire pal_lds_n, pal_uds_n;
+wire [15:0] pal_data;
 
-singleport_ram #(.WIDTH(8), .WIDTHAD(15)) palram(
+wire [12:0] igs023_pal_addr;
+wire [15:0] igs023_q, igs023_pal_data, igs023_pal_q;
+wire igs023_pal_we_l_n, igs023_pal_we_u_n;
+
+wire [14:0] igs023_vram_addr;
+wire [7:0] igs023_vram_q, igs023_vram_data;
+wire igs023_vram_we_n;
+
+wire [14:0] vram_addr;
+wire [7:0] vram_data;
+wire       vram_wren;
+
+singleport_ram #(.WIDTH(8), .WIDTHAD(15)) vram(
     .clock(clk),
-    .wren(pal_wren),
-    .address(pal_addr),
-    .data(pal_data),
-    .q(igs023_pal_q)
-);
-
-ram_ss_adaptor #(.WIDTH(8), .WIDTHAD(15), .SS_IDX(SSIDX_PAL_RAM)) palram_ss(
-    .clk,
-    .addr_in(igs023_pal_addr[14:0]),
-    .wren_in(~igs023_pal_we_n),
-    .data_in(igs023_pal_data),
-
-    .q(igs023_pal_q),
-
-    .addr_out(pal_addr),
-    .wren_out(pal_wren),
-    .data_out(pal_data),
-
-    .ssbus(ssb[SSIDX_PAL_RAM])
-);
-
-m68k_ram #(.WIDTHAD(15)) vram(
-    .clock(clk),
+    .wren(vram_wren),
     .address(vram_addr),
-    .we_lds_n(vram_lds_n),
-    .we_uds_n(vram_uds_n),
     .data(vram_data),
     .q(igs023_vram_q)
 );
 
-m68k_ram_ss_adaptor #(.WIDTHAD(15), .SS_IDX(SSIDX_VIDEO_RAM)) vram_ss(
+ram_ss_adaptor #(.WIDTH(8), .WIDTHAD(15), .SS_IDX(SSIDX_VIDEO_RAM)) vram_ss(
     .clk,
-    .addr_in(igs023_vram_addr[15:1]),
-    .lds_n_in(igs023_vram_we_l_n),
-    .uds_n_in(igs023_vram_we_u_n),
+    .addr_in(igs023_vram_addr[14:0]),
+    .wren_in(~igs023_vram_we_n),
     .data_in(igs023_vram_data),
 
     .q(igs023_vram_q),
 
     .addr_out(vram_addr),
-    .lds_n_out(vram_lds_n),
-    .uds_n_out(vram_uds_n),
+    .wren_out(vram_wren),
     .data_out(vram_data),
 
     .ssbus(ssb[SSIDX_VIDEO_RAM])
+);
+
+m68k_ram #(.WIDTHAD(12)) palram(
+    .clock(clk),
+    .address(pal_addr),
+    .we_lds_n(pal_lds_n),
+    .we_uds_n(pal_uds_n),
+    .data(pal_data),
+    .q(igs023_pal_q)
+);
+
+m68k_ram_ss_adaptor #(.WIDTHAD(12), .SS_IDX(SSIDX_PAL_RAM)) palram_ss(
+    .clk,
+    .addr_in(igs023_pal_addr[12:1]),
+    .lds_n_in(igs023_pal_we_l_n),
+    .uds_n_in(igs023_pal_we_u_n),
+    .data_in(igs023_pal_data),
+
+    .q(igs023_pal_q),
+
+    .addr_out(pal_addr),
+    .lds_n_out(pal_lds_n),
+    .uds_n_out(pal_uds_n),
+    .data_out(pal_data),
+
+    .ssbus(ssb[SSIDX_PAL_RAM])
 );
 
 wire [14:0] igs023_color;
@@ -628,6 +628,7 @@ assign sdr_scn0_addr = (cart_present && (igs023_sdr_addr >= cart_tile_base))
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
+    .ce_16m,
     .ce_50m,
     .ce_pixel,
 
@@ -647,14 +648,14 @@ IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .vram_addr(igs023_vram_addr),
     .vram_din(igs023_vram_q),
     .vram_dout(igs023_vram_data),
-    .vram_we_u_n(igs023_vram_we_u_n),
-    .vram_we_l_n(igs023_vram_we_l_n),
-    
+    .vram_we_n(igs023_vram_we_n),
+   
     .pal_addr(igs023_pal_addr),
     .pal_din(igs023_pal_q),
     .pal_dout(igs023_pal_data),
-    .pal_we_n(igs023_pal_we_n),
-
+    .pal_we_u_n(igs023_pal_we_u_n),
+    .pal_we_l_n(igs023_pal_we_l_n),
+ 
     // ROM interface
     .rom_address(igs023_sdr_addr),
     .rom_data(sdr_scn0_q),

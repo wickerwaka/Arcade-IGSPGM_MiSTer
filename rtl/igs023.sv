@@ -46,6 +46,7 @@ endmodule
 
 module IGS023 #(parameter SS_IDX=-1) (
     input clk,
+    input ce_16m,
     input ce_50m,
     output ce_pixel,
 
@@ -62,17 +63,17 @@ module IGS023 #(parameter SS_IDX=-1) (
     output cpu_dtack_n,
 
     // VRAM interface
-    output logic [15:0] vram_addr,
-    input        [15:0] vram_din,
-    output       [15:0] vram_dout,
-    output logic        vram_we_u_n,
-    output logic        vram_we_l_n,
-    
-    output logic [14:0] pal_addr,
-    input         [7:0] pal_din,
-    output        [7:0] pal_dout,
-    output logic        pal_we_n,
-
+    output logic [14:0] vram_addr,
+    input         [7:0] vram_din,
+    output        [7:0] vram_dout,
+    output logic        vram_we_n,
+   
+    output logic [12:0] pal_addr,
+    input        [15:0] pal_din,
+    output       [15:0] pal_dout,
+    output logic        pal_we_u_n,
+    output logic        pal_we_l_n,
+ 
 
     // ROM interface
     output reg [23:0] rom_address,
@@ -153,8 +154,8 @@ wire fg_en = ~ctrl_flags[11];
 
 assign cpu_dtack_n = cpu_cs_n ? 0 : dtack_n;
 
-assign pal_dout = pal_addr[0] ? cpu_din[7:0] : cpu_din[15:8];
-assign vram_dout = cpu_din;
+assign pal_dout = cpu_din[15:0];
+assign vram_dout = vram_addr[0] ? cpu_din[15:8] : cpu_din[7:0]; // little endian ordering in vram
 
 
 // 0 is the start of blanking
@@ -188,30 +189,30 @@ end
 
 wire [10:0] bg_hofs = bg_x[10:0]; // + bg_rowscroll[10:0];
 wire [9:0] bg_dot;
-wire [8:0] fg_dot;
+wire [8:0] fg_color;
+wire [14:0] fg_vram_addr;
+wire        fg_vram_master;
+wire [23:0] fg_rom_address;
+wire        fg_rom_read;
+reg         fg_rom_ready;
+wire        fg_start_read = (hcnt == 0);
 reg [15:0] bg_rowscroll;
 reg [15:0] bg_code, bg_attrib;
-reg [15:0] fg_code, fg_attrib;
 
 reg [(32*5)-1:0] bg_data;
-reg bg_load, fg_load;
-reg fg_rom_req;
+reg bg_load;
 reg [2:0] bg_rom_req;
 reg [23:0] bg_rom_address;
-reg [23:0] fg_rom_address;
 
 reg [1:0] rom_req_ch;
 
 wire bg_flipx = bg_attrib[6];
 wire bg_flipy = bg_attrib[7];
-wire fg_flipx = fg_attrib[6];
-wire fg_flipy = fg_attrib[7];
 
 wire [10:0] bg_draw_hcnt = (logical_hcnt - bg_hofs);
-wire [10:0] fg_draw_hcnt = (logical_hcnt - fg_x[10:0]);
 
 reg [1:0] bg_load_index;
-reg [10:0] bg_load_hcnt, fg_load_hcnt;
+reg [10:0] bg_load_hcnt;
 
 tile_shifter #(
     .TILE_WIDTH(32),
@@ -227,34 +228,36 @@ tile_shifter #(
     .load(bg_load)
 );
 
-tile_shifter fg_shift(
-    .clk, .ce(ce_pixel),
-    .tap(fg_draw_hcnt[4:0]),
-    .load_index(fg_load_hcnt[4:3]),
-    .load_data({rom_data}),
-    .load_color(fg_attrib[5:1]),
-    .load_flip(~fg_flipx),
-    .dot_out(fg_dot),
-    .load(fg_load)
+IGS023_FG fg(
+    .clk(clk),
+    .ce_16m(ce_16m),
+    .ce_pixel(ce_pixel),
+    .start_read(fg_start_read),
+    .scan_active(~(vblank | hblank)),
+    .x(fg_x[8:0]),
+    .y(logical_vcnt[7:0] + fg_y[7:0]),
+    .color_out(fg_color),
+    .vram_addr(fg_vram_addr),
+    .vram_din(vram_din),
+    .vram_master(fg_vram_master),
+    .rom_address(fg_rom_address),
+    .rom_data(rom_data),
+    .rom_read(fg_rom_read),
+    .rom_ready(fg_rom_ready)
 );
 
 wire [15:0] bg_addr           = 16'h0000;
-wire [15:0] fg_addr           = 16'h4000;
 wire [15:0] bg_rowscroll_addr = 16'h7000;
 
-reg [6:0] color_read;
-reg [14:0] color_addr;
+reg [12:0] color_addr;
 
 always_ff @(posedge clk) begin
     if (ce_pixel) begin
-        color <= {color_read, pal_din[7:0]};
-        if (~&fg_dot[3:0])
-            color_addr <= 14'h1000 + { 5'd0, fg_dot[8:4], fg_dot[3:0], 1'b0 };
+        color <= pal_din[14:0];
+        if (~&fg_color[3:0])
+            color_addr <= 13'h1000 + { 3'd0, fg_color[8:4], fg_color[3:0], 1'b0 };
         else
-            color_addr <= 14'h0800 + { 4'd0, bg_dot, 1'b0 };
-    end else if (ce_pixel_post2) begin
-        color_addr[0] <= 1;
-        color_read <= pal_din[6:0];
+            color_addr <= 13'h0800 + { 2'd0, bg_dot, 1'b0 };
     end
 end
 
@@ -262,12 +265,12 @@ always_comb begin
     bit [5:0] h;
     bit [10:0] v;
 
-    vram_addr = 16'd0;
-    vram_we_l_n = 1;
-    vram_we_u_n = 1;
+    vram_addr = fg_vram_addr;
+    vram_we_n = 1;
 
     pal_addr  = color_addr;
-    pal_we_n = 1;
+    pal_we_l_n = 1;
+    pal_we_u_n = 1;
 
     v = 0;
 
@@ -275,16 +278,6 @@ always_comb begin
     next_access_state = idx_to_state[hcnt[4:0] + 5'd1];
 
     unique case(access_state)
-        FG_ATTRIB0: begin
-            v = logical_vcnt[10:0] - fg_y[10:0];
-            vram_addr = fg_addr + { 3'b0, v[7:3], fg_load_hcnt[8:3], 2'b00 };
-        end
-
-        FG_ATTRIB1: begin
-            v = logical_vcnt[10:0] - fg_y[10:0];
-            vram_addr = fg_addr + { 3'b0, v[7:3], fg_load_hcnt[8:3], 2'b10 };
-        end
-
         BG_ATTRIB0: begin
             v = logical_vcnt[10:0] + bg_y[10:0];
             vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b00 };
@@ -296,16 +289,16 @@ always_comb begin
         end
 
         CPU_ACCESS: begin
-            if (is_pal_access && ram_access == 2'd2) begin
-                pal_addr = {cpu_addr[14:1], 1'b0};
-                pal_we_n = cpu_rw;
-            end else if (is_pal_access && ram_access == 2'd1) begin
-                pal_addr = {cpu_addr[14:1], 1'b1};
-                pal_we_n = cpu_rw;
-            end else if (is_vram_access && |ram_access) begin
-                vram_addr = cpu_addr[15:0];
-                vram_we_l_n = cpu_lds_n | cpu_rw;
-                vram_we_u_n = cpu_uds_n | cpu_rw;
+            if (is_vram_access && ram_access == 2'd2) begin
+                vram_addr = {cpu_addr[14:1], 1'b0};
+                vram_we_n = cpu_rw;
+            end else if (is_vram_access && ram_access == 2'd1) begin
+                vram_addr = {cpu_addr[14:1], 1'b1};
+                vram_we_n = cpu_rw;
+            end else if (is_pal_access && |ram_access) begin
+                pal_addr = cpu_addr[12:0];
+                pal_we_l_n = cpu_lds_n | cpu_rw;
+                pal_we_u_n = cpu_uds_n | cpu_rw;
             end
         end
         default: begin end
@@ -379,16 +372,7 @@ always @(posedge clk) begin
 
         if (ce_pixel) begin
             bg_load <= 0;
-            fg_load <= 0;
             unique case(access_state)
-                FG_ATTRIB0: fg_code <= vram_din;
-                FG_ATTRIB1: begin
-                    v = logical_vcnt[10:0] - fg_y[10:0];
-                    fg_attrib <= vram_din;
-                    fg_rom_address <= { 3'd0, fg_code, v[2:0], 2'd0 };
-                    fg_rom_req <= 1;
-                end
-
                 BG_ATTRIB0: bg_code <= vram_din;
                 BG_ATTRIB1: begin
                     v = logical_vcnt[10:0] + bg_y[10:0];
@@ -398,20 +382,20 @@ always @(posedge clk) begin
                 end
 
                 CPU_ACCESS: begin
-                    if (is_pal_access) begin
+                    if (is_vram_access) begin
                         if (ram_access == 2'd2) begin
-                            cpu_dout[15:8] <= pal_din;
+                            cpu_dout[15:8] <= vram_din;
                             ram_access <= 2'd1;
                         end else if (ram_access == 2'd1) begin
-                            cpu_dout[7:0] <= pal_din;
+                            cpu_dout[7:0] <= vram_din;
                             ram_access <= 0;
                             dtack_n <= 0;
                         end
-                    end else if (is_vram_access) begin
+                    end else if (is_pal_access) begin
                         if (|ram_access) begin
                             ram_access <= 0;
                             dtack_n <= 0;
-                            cpu_dout <= vram_din;
+                            cpu_dout <= pal_din;
                         end
                     end
                 end
@@ -426,10 +410,6 @@ always @(posedge clk) begin
                     end
                 end
 
-                FG_ATTRIB0: begin
-                    fg_load_hcnt <= (logical_hcnt + 11'd16) - fg_x[10:0];
-                end
-
                 BG_ATTRIB0: begin
                     bg_load_hcnt <= (logical_hcnt + 11'd64) - bg_hofs;
                 end
@@ -441,19 +421,19 @@ always @(posedge clk) begin
         end // ce_pixel
 
         if (rom_req == rom_ack) begin
+            fg_rom_ready <= 0;
             if (rom_req_ch == 1) begin
                 bg_load <= bg_rom_req == 0;
                 bg_data <= { rom_data, bg_data[(32*5)-1:32] };
                 rom_req_ch <= 0;
             end else if (rom_req_ch == 2) begin
-                fg_load <= 1;
                 rom_req_ch <= 0;
+                fg_rom_ready <= 1;
             end else begin
-                if (fg_rom_req) begin
+                if (fg_rom_read & ~fg_rom_ready) begin
                     rom_address <= fg_rom_address;
                     rom_req <= ~rom_req;
                     rom_req_ch <= 2;
-                    fg_rom_req <= 0;
                 end else if (bg_rom_req != 0) begin
                     rom_address <= bg_rom_address;
                     bg_rom_address <= bg_rom_address + 4;
@@ -487,6 +467,7 @@ always @(posedge clk) begin
         end
     end
 end
+
 
 endmodule
 

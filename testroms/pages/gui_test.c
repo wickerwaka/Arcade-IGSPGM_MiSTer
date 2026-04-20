@@ -35,7 +35,7 @@ static void update()
     gui_button("BUTTON 4");
     
     text_cursor(1, 16);
-    textf("SCANLINE: %03X", IGS023_SCANLINE_GET());
+    textf("SCANLINE: %03X", IGS023_SCANLINE_RAW());
 
     frame_count++;
 }
