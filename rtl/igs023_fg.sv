@@ -1,6 +1,6 @@
 module IGS023_FG(
     input clk,
-    input ce_16m,
+    input ce_33m,
     input ce_pixel,
 
     input start_read,
@@ -30,19 +30,13 @@ module IGS023_FG(
 // We are going to read from ram as fast as we can, stall for SDRam reads and count the cycles
 
 typedef enum logic[2:0] {
-    IDLE,
-    READING
-} state_t;
-
-state_t state = IDLE;
-
-typedef enum logic[2:0] {
     READ0, READ1, READ2, READ3, ROM_REQ, ROM_WAIT, DONE
 } read_state_t;
 
 read_state_t read_state = READ0;
 
-assign vram_master = ( state == READING );
+reg reading_vram;
+assign vram_master = reading_vram;
 
 reg [6:0] vram_row_addr;
 reg [7:0] tile_addr;
@@ -67,18 +61,19 @@ assign color_out = {palette_buffer[buffer_idx], color_buffer[buffer_idx][4*pixel
 reg [8:0] read_counter;
 always_ff @(posedge clk) begin
     if (start_read) begin
-        state <= READING;
+        reading_vram <= 1;
         read_state <= READ0;
         vram_row_addr <= { 2'b10, y[7:3] };
         tile_addr <= {x[8:3], 2'b00};
         read_counter <= 0;
         buffer_idx <= 0;
-        pixel_idx <= 0;
-    end else if (state == READING) begin
-        if (ce_16m) begin
+        pixel_idx <= x[2:0];
+    end else if (reading_vram) begin
+        if (ce_33m) begin
             read_counter <= read_counter + 1;
             if (read_counter == ((8 * 57) - 1)) begin
-                state <= IDLE;
+                reading_vram <= 0;
+                buffer_idx <= 0;
             end
         end
 
@@ -100,7 +95,6 @@ always_ff @(posedge clk) begin
             READ3: begin
                 tile_attrib[7:0] <= vram_din;
                 tile_addr <= tile_addr + 1;
-                buffer_idx <= tile_addr[7:2];
                 read_state <= ROM_REQ;
             end
             ROM_REQ: begin
@@ -118,19 +112,16 @@ always_ff @(posedge clk) begin
 
                     if (buffer_idx == 56) begin
                         read_state <= DONE;
-                        buffer_idx <= 0;
-                        pixel_idx <= 0;
                     end else begin
                         read_state <= READ0;
                     end
+                    buffer_idx <= buffer_idx + 1;
                 end
             end
             DONE: begin end
             default: read_state <= DONE;
         endcase
-    end
-   
-    if (ce_pixel & scan_active) begin
+    end else if (ce_pixel & scan_active) begin
         pixel_idx <= pixel_idx + 1;
         if (&pixel_idx) buffer_idx <= buffer_idx + 1;
     end

@@ -11,17 +11,24 @@ TARGET = pgm_test
 SRCS =  init.c main.c util.c page.c gui.c igs023.c
 SRCS += interrupts_default.c comms.c tilemap.c input.c color.c printf/printf.c
 
-#SRCS += pages/system_basics.c
-#SRCS += pages/gui_test.c
-#SRCS += pages/fg_test.c
+ifeq ($(strip $(PAGE)),)
+SRCS += pages/system_basics.c
+SRCS += pages/gui_test.c
 SRCS += pages/bg_test.c
-#SRCS += pages/irq4_test.c
-#SRCS += pages/sprite_test.c
+SRCS += pages/irq4_test.c
+SRCS += pages/sprite_test.c
 SRCS += pages/ctrl_test.c
 SRCS += pages/vram_test.c
+SRCS += pages/fg_test.c
+else
+SRCS += pages/$(PAGE).c
+endif
+
 
 BUILD_DIR = build/$(TARGET)
 ROM_DIR = ../roms
+PAGE_BUILD_ID := $(if $(strip $(PAGE)),$(PAGE),all-pages)
+PAGE_STAMP := $(BUILD_DIR)/.page-$(PAGE_BUILD_ID)
 
 OBJS = $(addprefix $(BUILD_DIR)/, $(SRCS:c=o)) \
 	   $(addprefix $(BUILD_DIR)/, $(ASM:s=o))
@@ -75,7 +82,11 @@ $(BUILD_DIR)/%.o: %.s $(GLOBAL_DEPS) | $(BUILD_DIRS)
 $(BUILD_DIR)/%.o: %.chr $(GLOBAL_DEPS) | $(BUILD_DIRS)
 	$(OBJCOPY) -I binary -O default $< $@
 
-$(BUILD_DIR)/cpu.elf: $(OBJS) $(GAME).ld
+$(PAGE_STAMP): | $(BUILD_DIR)
+	@rm -f $(BUILD_DIR)/.page-*
+	@touch $@
+
+$(BUILD_DIR)/cpu.elf: $(OBJS) $(GAME).ld $(PAGE_STAMP)
 	@echo $@
 	@$(CC) -T $(GAME).ld -o $@ $(LDFLAGS) $(OBJS) $(LIBS)
 	@$(OBJDUMP) -d -S $@ > $(BUILD_DIR)/cpu.asm

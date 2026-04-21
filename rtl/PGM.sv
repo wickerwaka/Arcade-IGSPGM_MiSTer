@@ -628,7 +628,7 @@ assign sdr_scn0_addr = (cart_present && (igs023_sdr_addr >= cart_tile_base))
 
 IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .clk,
-    .ce_16m,
+    .ce_33m,
     .ce_50m,
     .ce_pixel,
 
@@ -666,11 +666,11 @@ IGS023 #(.SS_IDX(SSIDX_IGS023)) igs023(
     .irq4(irq4),
 
     // Video interface
-    .color(igs023_color),
-    .hsync,
-    .hblank,
-    .vsync,
-    .vblank,
+    .vid_color(igs023_color),
+    .vid_hsync(hsync),
+    .vid_hblank(hblank),
+    .vid_vsync(vsync),
+    .vid_vblank(vblank),
 
     .ssbus(ssb[SSIDX_IGS023])
 );

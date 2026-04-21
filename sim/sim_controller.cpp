@@ -133,7 +133,7 @@ ControllerResult<EmptyResult> SimController::Initialize(bool headless)
     }
     else
     {
-        gSimCore.mVideo->Init(448, 224, ImguiGetRenderer());
+        gSimCore.mVideo->Init(450, 224, ImguiGetRenderer());
         gSimCore.mGfxCache->Init(ImguiGetRenderer(), gSimCore.Memory(MemoryRegion::PALETTE_RAM));
     }
 

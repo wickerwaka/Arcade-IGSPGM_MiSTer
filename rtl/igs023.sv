@@ -46,7 +46,7 @@ endmodule
 
 module IGS023 #(parameter SS_IDX=-1) (
     input clk,
-    input ce_16m,
+    input ce_33m,
     input ce_50m,
     output ce_pixel,
 
@@ -85,11 +85,11 @@ module IGS023 #(parameter SS_IDX=-1) (
     output reg        irq4,
 
     // Video interface
-    output reg [14:0] color,
-    output hsync,
-    output hblank,
-    output vsync,
-    output vblank,
+    output reg [14:0] vid_color,
+    output reg vid_hsync,
+    output reg vid_hblank,
+    output reg vid_vsync,
+    output reg vid_vblank,
 
     ssbus_if.slave ssbus
 );
@@ -167,13 +167,14 @@ wire [10:0] logical_hcnt = { 1'b0, hcnt } - 11'd189;
 wire [10:0] logical_vcnt = { 2'b0, vcnt } - 11'd38;
 
 
-assign hsync = (hcnt >= 63 && hcnt < (63 + 63));
-assign hblank = hcnt < 192;
-assign vsync = (vcnt >= 14 && vcnt < (14 + 8));
-assign vblank = vcnt < 38;
-
+wire hsync = (hcnt >= 63 && hcnt < (63 + 63));
+wire hblank = hcnt < 192;
+wire vsync = (vcnt >= 14 && vcnt < (14 + 8));
+wire vblank = vcnt < 38;
 
 always @(posedge clk) begin
+    fg_start_read <= 0;
+
     if (ce_pixel) begin
         hcnt <= hcnt + 1;
 
@@ -183,6 +184,11 @@ always @(posedge clk) begin
             if (vcnt == 261) begin
                 vcnt <= 0;
             end
+        end
+
+        if (hcnt == 638 && vcnt > 36 && vcnt < 261) begin
+            fg_read_y <= logical_vcnt[7:0] + fg_y[7:0] + 8'd1;
+            fg_start_read <= 1;
         end
     end
 end
@@ -195,7 +201,8 @@ wire        fg_vram_master;
 wire [23:0] fg_rom_address;
 wire        fg_rom_read;
 reg         fg_rom_ready;
-wire        fg_start_read = (hcnt == 0);
+reg         fg_start_read;
+reg   [7:0] fg_read_y;
 reg [15:0] bg_rowscroll;
 reg [15:0] bg_code, bg_attrib;
 
@@ -229,13 +236,13 @@ tile_shifter #(
 );
 
 IGS023_FG fg(
-    .clk(clk),
-    .ce_16m(ce_16m),
-    .ce_pixel(ce_pixel),
+    .clk,
+    .ce_33m,
+    .ce_pixel,
     .start_read(fg_start_read),
     .scan_active(~(vblank | hblank)),
     .x(fg_x[8:0]),
-    .y(logical_vcnt[7:0] + fg_y[7:0]),
+    .y(fg_read_y),
     .color_out(fg_color),
     .vram_addr(fg_vram_addr),
     .vram_din(vram_din),
@@ -251,13 +258,18 @@ wire [15:0] bg_rowscroll_addr = 16'h7000;
 
 reg [12:0] color_addr;
 
+reg hblank2, vblank2, hsync2, vsync2;
 always_ff @(posedge clk) begin
     if (ce_pixel) begin
-        color <= pal_din[14:0];
+        vid_color <= pal_din[14:0];
+        vsync2 <= vsync; vid_vsync <= vsync2;
+        vblank2 <= vblank; vid_vblank <= vblank2;
+        hsync2 <= hsync; vid_hsync <= hsync2;
+        hblank2 <= hblank; vid_hblank <= hblank2;
         if (~&fg_color[3:0])
             color_addr <= 13'h1000 + { 3'd0, fg_color[8:4], fg_color[3:0], 1'b0 };
         else
-            color_addr <= 13'h0800 + { 2'd0, bg_dot, 1'b0 };
+            color_addr <= 13'h0800 + 62; // + { 2'd0, bg_dot, 1'b0 };
     end
 end
 
@@ -277,32 +289,34 @@ always_comb begin
     access_state = idx_to_state[hcnt[4:0]];
     next_access_state = idx_to_state[hcnt[4:0] + 5'd1];
 
-    unique case(access_state)
-        BG_ATTRIB0: begin
-            v = logical_vcnt[10:0] + bg_y[10:0];
-            vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b00 };
-        end
-
-        BG_ATTRIB1: begin
-            v = logical_vcnt[10:0] + bg_y[10:0];
-            vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b10 };
-        end
-
-        CPU_ACCESS: begin
-            if (is_vram_access && ram_access == 2'd2) begin
-                vram_addr = {cpu_addr[14:1], 1'b0};
-                vram_we_n = cpu_rw;
-            end else if (is_vram_access && ram_access == 2'd1) begin
-                vram_addr = {cpu_addr[14:1], 1'b1};
-                vram_we_n = cpu_rw;
-            end else if (is_pal_access && |ram_access) begin
-                pal_addr = cpu_addr[12:0];
-                pal_we_l_n = cpu_lds_n | cpu_rw;
-                pal_we_u_n = cpu_uds_n | cpu_rw;
+    if (~fg_vram_master) begin
+        unique case(access_state)
+            BG_ATTRIB0: begin
+                v = logical_vcnt[10:0] + bg_y[10:0];
+                vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b00 };
             end
-        end
-        default: begin end
-    endcase
+
+            BG_ATTRIB1: begin
+                v = logical_vcnt[10:0] + bg_y[10:0];
+                vram_addr = bg_addr + { 2'b0, v[10:5], bg_load_hcnt[10:5], 2'b10 };
+            end
+
+            CPU_ACCESS: begin
+                if (is_vram_access && ram_access == 2'd2) begin
+                    vram_addr = {cpu_addr[14:1], 1'b0};
+                    vram_we_n = cpu_rw;
+                end else if (is_vram_access && ram_access == 2'd1) begin
+                    vram_addr = {cpu_addr[14:1], 1'b1};
+                    vram_we_n = cpu_rw;
+                end else if (is_pal_access && |ram_access) begin
+                    pal_addr = cpu_addr[12:0];
+                    pal_we_l_n = cpu_lds_n | cpu_rw;
+                    pal_we_u_n = cpu_uds_n | cpu_rw;
+                end
+            end
+            default: begin end
+        endcase
+    end
 end
 
 reg vblank_prev;
@@ -382,20 +396,22 @@ always @(posedge clk) begin
                 end
 
                 CPU_ACCESS: begin
-                    if (is_vram_access) begin
-                        if (ram_access == 2'd2) begin
-                            cpu_dout[15:8] <= vram_din;
-                            ram_access <= 2'd1;
-                        end else if (ram_access == 2'd1) begin
-                            cpu_dout[7:0] <= vram_din;
-                            ram_access <= 0;
-                            dtack_n <= 0;
-                        end
-                    end else if (is_pal_access) begin
-                        if (|ram_access) begin
-                            ram_access <= 0;
-                            dtack_n <= 0;
-                            cpu_dout <= pal_din;
+                    if (~fg_vram_master) begin
+                        if (is_vram_access) begin
+                            if (ram_access == 2'd2) begin
+                                cpu_dout[15:8] <= vram_din;
+                                ram_access <= 2'd1;
+                            end else if (ram_access == 2'd1) begin
+                                cpu_dout[7:0] <= vram_din;
+                                ram_access <= 0;
+                                dtack_n <= 0;
+                            end
+                        end else if (is_pal_access) begin
+                            if (|ram_access) begin
+                                ram_access <= 0;
+                                dtack_n <= 0;
+                                cpu_dout <= pal_din;
+                            end
                         end
                     end
                 end
@@ -404,7 +420,7 @@ always @(posedge clk) begin
 
             case(next_access_state)
                 CPU_ACCESS: begin
-                    if (ram_pending) begin
+                    if (ram_pending & ~fg_vram_master) begin
                         ram_access <= 2'd2;
                         ram_pending <= 0;
                     end

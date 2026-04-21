@@ -70,6 +70,8 @@ static void update()
     gui_u16_func("Y", IGS023_FG_Y_GET, IGS023_FG_Y_SET);
     gui_end();
 
+    //IGS023_FG_X_SET(IGS023_FG_X_GET() + 1);
+
     text_cursor(4, 12);
     text("FFFFFFFFFF");
     IGS023Tile *tile = text_get_tile(4, 12);
