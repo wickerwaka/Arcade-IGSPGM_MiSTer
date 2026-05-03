@@ -258,7 +258,7 @@ always_ff @(posedge clk) begin
         pixel0_wr <= 0;
         pixel1_wr <= 0;
 
-        if (spr_x_flip) begin
+        if (spr_x_flip ^ spr_y_flip) begin
             pixel_column <= (spr_x + { 1'b0, spr_width, 4'b0 }) - (pixel_next + 2);
         end else begin
             pixel_column <= spr_x + pixel_next;
@@ -542,13 +542,13 @@ IGS023_Buffer line_buffer(
 
     .scan_color(color_out),
 
-    .wr0(spr_x_flip ? pixel1_wr : pixel0_wr),
-    .wr1(spr_x_flip ? pixel0_wr : pixel1_wr),
+    .wr0(spr_x_flip ^ spr_y_flip ? pixel1_wr : pixel0_wr),
+    .wr1(spr_x_flip ^ spr_y_flip ? pixel0_wr : pixel1_wr),
     .column(pixel_column[8:0]),
     .prio(pixel_prio),
     .palette(pixel_palette),
-    .arom_offset0(spr_x_flip ? pixel1_offset : pixel0_offset),
-    .arom_offset1(spr_x_flip ? pixel0_offset : pixel1_offset),
+    .arom_offset0(spr_x_flip ^ spr_y_flip ? pixel1_offset : pixel0_offset),
+    .arom_offset1(spr_x_flip ^ spr_y_flip ? pixel0_offset : pixel1_offset),
     .line(draw_line),
     .ready(buffer_ready),
 
