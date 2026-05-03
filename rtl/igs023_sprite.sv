@@ -366,9 +366,9 @@ always_ff @(posedge clk) begin
                     spr.brom_cache <= brom_data;
                     dma_state <= PRESCAN_SCAN_TO_START;
                     spr.brom_offset <= 2;
-                    spr.arom_offset.sub <= 0;
                     tmp_addr32 = spr_y_flip ? { brom_data[47:32], brom_data[63:48] } : { brom_data[31:0] };
                     spr.arom_offset.words <= tmp_addr32[25:2];
+                    spr.arom_offset.sub <= tmp_addr32[1:0];
                     spr.active <= 1;
                 end
             end
