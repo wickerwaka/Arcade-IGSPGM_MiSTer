@@ -53,7 +53,7 @@ module ics2115
     logic [7:0] irq_enabled;    // system IRQ enable mask (register 0x4A write)
     logic       irq_on;         // computed IRQ state
 
-    // IRQV auto-clear side-effect signals (registered — cleared one cycle after host read)
+    // IRQV auto-clear side-effect signals (registered — cleared after the host read cycle completes)
     logic       irqv_clear_osc;
     logic       irqv_clear_vol;
     logic [4:0] irqv_clear_voice;
@@ -306,9 +306,14 @@ module ics2115
     // Host bus read detection
     // =========================================================================
     logic host_rd_pulse;
+    logic host_rd_done_pulse;
     logic host_rd_prev;
 
     assign host_rd_pulse = ~host_cs_n & ~host_rd_n & host_rd_prev;
+    // Apply read side effects after RD/CS deasserts so host_dout remains stable
+    // for the full Z80 read cycle.  Clearing IRQV on the leading edge makes
+    // the Z80 sample 0xFF/no-pending instead of the interrupting voice number.
+    assign host_rd_done_pulse = (host_cs_n | host_rd_n) & ~host_rd_prev;
 
     always_ff @(posedge clk or negedge reset_n) begin
         if (!reset_n)
@@ -481,7 +486,7 @@ module ics2115
         irqv_clear_vol_next   = 1'b0;
         irqv_clear_voice_next = 5'd0;
         irqv_clear_found      = 1'b0;
-        if (host_rd_pulse && host_addr == 2'd3 && reg_select == 8'h0F) begin
+        if (host_rd_done_pulse && host_addr == 2'd3 && reg_select == 8'h0F) begin
             for (int i = 0; i < NUM_VOICES; i++) begin
                 if (i[4:0] <= active_osc && !irqv_clear_found) begin
                     if (voice_regs[i].osc_conf[OSC_IRQ_PEND] || voice_regs[i].vol_ctrl[VOL_IRQ_PEND]) begin
@@ -501,7 +506,7 @@ module ics2115
     always_comb begin
         timer_irq_clear_next[0] = 1'b0;
         timer_irq_clear_next[1] = 1'b0;
-        if (host_rd_pulse && (host_addr == 2'd2 || host_addr == 2'd3)) begin
+        if (host_rd_done_pulse && (host_addr == 2'd2 || host_addr == 2'd3)) begin
             if (reg_select == 8'h40)
                 timer_irq_clear_next[0] = 1'b1;
             else if (reg_select == 8'h41)
