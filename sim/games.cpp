@@ -140,6 +140,78 @@ bool LoadPgmEntry(const std::vector<uint8_t> &buffer, const char *name, const Pg
            name, entry.size, entry.offset, destBase, entry.mapping);
     return true;
 }
+
+bool LoadFileByNameOrCrc(const char *name, uint32_t crc, std::vector<uint8_t> &buffer)
+{
+    if (crc != 0 && gFileSearch.LoadFileByCRC(crc, buffer))
+    {
+        printf("Loaded file by CRC %08X for %s\n", crc, name);
+        return true;
+    }
+
+    if (gFileSearch.LoadFile(name, buffer))
+        return true;
+
+    printf("Failed to find file: %s\n", name);
+    return false;
+}
+
+bool LoadSdramData(const char *name, uint32_t crc, uint32_t destBase)
+{
+    std::vector<uint8_t> buffer;
+    if (!LoadFileByNameOrCrc(name, crc, buffer))
+        return false;
+
+    gSimCore.mSDRAM->Write(destBase, static_cast<uint32_t>(buffer.size()), buffer.data());
+    printf("Loaded %zu bytes from %s to SDRAM 0x%08X\n", buffer.size(), name, destBase);
+    return true;
+}
+
+bool LoadSdramData16be(const char *name, uint32_t crc, uint32_t destBase, size_t fileOffset = 0, size_t length = 0)
+{
+    std::vector<uint8_t> buffer;
+    if (!LoadFileByNameOrCrc(name, crc, buffer))
+        return false;
+
+    if (fileOffset > buffer.size())
+    {
+        printf("Invalid offset for %s: offset=0x%zx size=0x%zx\n", name, fileOffset, buffer.size());
+        return false;
+    }
+
+    const size_t available = buffer.size() - fileOffset;
+    if (length == 0)
+        length = available;
+    if (length > available)
+    {
+        printf("Invalid length for %s: offset=0x%zx length=0x%zx size=0x%zx\n", name, fileOffset, length, buffer.size());
+        return false;
+    }
+
+    std::vector<uint8_t> swapped((length + 1) & ~size_t(1), 0);
+    for (size_t i = 0; i < length; i += 2)
+    {
+        swapped[i + 0] = (i + 1 < length) ? buffer[fileOffset + i + 1] : 0;
+        swapped[i + 1] = buffer[fileOffset + i + 0];
+    }
+
+    gSimCore.mSDRAM->Write(destBase, static_cast<uint32_t>(swapped.size()), swapped.data());
+    printf("Loaded %zu bytes (16-bit BE) from %s offset 0x%zx to SDRAM 0x%08X\n", swapped.size(), name, fileOffset, destBase);
+    return true;
+}
+
+bool LoadDdrData(const char *name, uint32_t crc, uint32_t destBase)
+{
+    std::vector<uint8_t> buffer;
+    if (!LoadFileByNameOrCrc(name, crc, buffer))
+        return false;
+
+    if (!gSimCore.mDDRMemory->LoadData(buffer, destBase, 1))
+        return false;
+
+    printf("Loaded %zu bytes from %s to DDR 0x%08X\n", buffer.size(), name, destBase);
+    return true;
+}
 }
 
 static const char *gGameNames[N_GAMES] = {
@@ -147,6 +219,10 @@ static const char *gGameNames[N_GAMES] = {
     "testbios",
     "pgm_test",
     "espgalbl",
+    "ketbl",
+    "ddpdojblkbl",
+    "kovbl",
+    "kovplusbl",
 };
 
 static std::string gLoadedGameShortName = "unknown";
@@ -241,6 +317,94 @@ static void LoadEspgalbl()
     gSimCore.SetGame(GAME_PGM);
 }
 
+static void LoadKetbl()
+{
+    LoadPgm();
+
+    gFileSearch.AddSearchPath("../roms/ketbl.zip");
+    gFileSearch.AddSearchPath("../roms/ket.zip");
+
+    LoadSdramData16be("ketsui_u1.bin", 0x391767b4, CART_PROG_ROM_SDR_BASE, 0x200000, 0x200000);
+    LoadSdramData("t04701w064.u19", 0x2665b041, CART_TILE_ROM_SDR_BASE);
+    LoadSdramData("b04701w064.u1", 0x1bec008d, CART_B_ROM_SDR_BASE);
+    LoadDdrData("a04701w064.u7", 0x5ef1b94b, CART_A_ROM_DDR_BASE);
+    LoadDdrData("a04702w064.u8", 0x26d6da7f, CART_A_ROM_DDR_BASE + 0x0800000);
+    LoadSdramData("m04701b032.u17", 0xb46e22d1, CART_MUSIC_ROM_SDR_BASE);
+
+    gSimCore.mTop->rootp->sim_top__DOT__cart_present = 1;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_prog_base = 0;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_tile_base = 0x180000;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_music_base = 0x400000;
+
+    gLoadedGameShortName = "ketbl";
+    gSimCore.SetGame(GAME_PGM);
+}
+
+static void LoadDdpdojblkbl()
+{
+    LoadPgm();
+
+    gFileSearch.AddSearchPath("../roms/ddpdojblkbl.zip");
+    gFileSearch.AddSearchPath("../roms/ddpdojblk.zip");
+    gFileSearch.AddSearchPath("../roms/ddp3.zip");
+
+    LoadSdramData16be("ddp_doj_u1.bin", 0xeb4ab06a, CART_PROG_ROM_SDR_BASE);
+    LoadSdramData("t04401w064.u19", 0x3a95f19c, CART_TILE_ROM_SDR_BASE);
+    LoadSdramData("b04401w064_corrupt.u1", 0x8cbff066, CART_B_ROM_SDR_BASE);
+    LoadDdrData("a04401w064.u7", 0xed229794, CART_A_ROM_DDR_BASE);
+    LoadDdrData("a04402w064.u8", 0x752167b0, CART_A_ROM_DDR_BASE + 0x0800000);
+    LoadSdramData("m04401b032.u17", 0x5a0dbd76, CART_MUSIC_ROM_SDR_BASE);
+
+    gSimCore.mTop->rootp->sim_top__DOT__cart_present = 1;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_prog_base = 0x100000;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_tile_base = 0x180000;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_music_base = 0x400000;
+
+    gLoadedGameShortName = "ddpdojblkbl";
+    gSimCore.SetGame(GAME_PGM);
+}
+
+static void LoadKovblCommon(const char *shortName, const char *zipName, uint32_t prg1Crc)
+{
+    LoadPgm();
+
+    gFileSearch.AddSearchPath(std::string("../roms/") + zipName + ".zip");
+    gFileSearch.AddSearchPath("../roms/kov.zip");
+    gFileSearch.AddSearchPath("../roms/kovplus.zip");
+
+    LoadSdramData16be("prg1.29f1610ml", prg1Crc, CART_PROG_ROM_SDR_BASE);
+    LoadSdramData16be("prg2.am27c4096", 0x7b3577dc, CART_PROG_ROM_SDR_BASE + 0x200000);
+    LoadSdramData("t0600a 1610", 0x64e406a1, CART_TILE_ROM_SDR_BASE + 0x000000);
+    LoadSdramData("t0600b 1610", 0x26591209, CART_TILE_ROM_SDR_BASE + 0x200000);
+    LoadSdramData("t0600c 1610", 0x461dc80c, CART_TILE_ROM_SDR_BASE + 0x400000);
+    LoadSdramData("t0600d 1610", 0xf7e6b529, CART_TILE_ROM_SDR_BASE + 0x600000);
+    LoadSdramData("pgm_b0600.u5", 0x7d3cd059, CART_B_ROM_SDR_BASE + 0x000000);
+    LoadSdramData("pgm_b0601.u7", 0xa0bb1c2f, CART_B_ROM_SDR_BASE + 0x800000);
+    LoadDdrData("pgm_a0600.u2", 0xd8167834, CART_A_ROM_DDR_BASE + 0x0000000);
+    LoadDdrData("pgm_a0601.u4", 0xff7a4373, CART_A_ROM_DDR_BASE + 0x0800000);
+    LoadDdrData("pgm_a0602.u6", 0xe7a32959, CART_A_ROM_DDR_BASE + 0x1000000);
+    LoadDdrData("pgm_a0603.u9", 0xec31abda, CART_A_ROM_DDR_BASE + 0x1800000);
+    LoadSdramData("pgm_m0600.u3", 0x3ada4fd6, CART_MUSIC_ROM_SDR_BASE);
+
+    gSimCore.mTop->rootp->sim_top__DOT__cart_present = 1;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_prog_base = 0x100000;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_tile_base = 0x180000;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_music_base = 0x400000;
+
+    gLoadedGameShortName = shortName;
+    gSimCore.SetGame(GAME_PGM);
+}
+
+static void LoadKovbl()
+{
+    LoadKovblCommon("kovbl", "kovbl", 0xe74fcc47);
+}
+
+static void LoadKovplusbl()
+{
+    LoadKovblCommon("kovplusbl", "kovplusbl", 0x35806d1b);
+}
+
 
 bool GameInit(Game game)
 {
@@ -260,6 +424,18 @@ bool GameInit(Game game)
         break;
     case GAME_ESPGALBL:
         LoadEspgalbl();
+        break;
+    case GAME_KETBL:
+        LoadKetbl();
+        break;
+    case GAME_DDPDOJBLKBL:
+        LoadDdpdojblkbl();
+        break;
+    case GAME_KOVBL:
+        LoadKovbl();
+        break;
+    case GAME_KOVPLUSBL:
+        LoadKovplusbl();
         break;
     default:
         return false;

@@ -45,6 +45,8 @@ assign dtack_n = ~( state == IDLE || state == READY );
 
 reg prev_reset;
 
+wire cart_access = cart_present && (cpu_addr >= cart_base_addr) && ~as_n;
+
 always_ff @(posedge clk) begin
     cache_line <= cache_data[index];
     cached_tag <= cache_tag[index];
@@ -61,7 +63,7 @@ always_ff @(posedge clk) begin
             if (cached_tag == tag) begin
                 state <= READY;
             end else begin
-                if (cart_present && (cpu_addr >= cart_base_addr)) begin
+                if (cart_access) begin
                     sdr_addr <= CART_PROG_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2] - cart_base_addr[22:2], 3'b000 };
                 end else begin
                     sdr_addr <= BIOS_PROG_ROM_SDR_BASE[26:0] + { 3'b0, cpu_addr[22:2], 3'b000 };

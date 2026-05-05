@@ -123,7 +123,7 @@ wire hblank = hcnt < 192;
 wire vsync = (vcnt >= 14 && vcnt < (14 + 8));
 wire vblank = vcnt < 38;
 
-reg prev_fg_vram_master;
+reg prev_fg_fpga_vram_master;
 always @(posedge clk) begin
     fg_start_read <= 0;
     bg_start_read <= 0;
@@ -145,8 +145,8 @@ always @(posedge clk) begin
             bg_read_y <= logical_vcnt[10:0] + bg_y[10:0] + 11'd1;
         end
 
-        prev_fg_vram_master <= fg_vram_master;
-        if (prev_fg_vram_master & ~fg_vram_master) bg_start_read <= 1;
+        prev_fg_fpga_vram_master <= fg_fpga_vram_master;
+        if (prev_fg_fpga_vram_master & ~fg_fpga_vram_master) bg_start_read <= 1;
     end
 end
 
@@ -158,7 +158,8 @@ wire        bg_rom_req;
 
 wire [8:0] fg_color;
 wire [14:0] fg_vram_addr;
-wire        fg_vram_master;
+wire        fg_real_vram_master;
+wire        fg_fpga_vram_master;
 wire        fg_rom_master;
 wire [23:0] fg_rom_address;
 wire        fg_rom_req;
@@ -180,11 +181,13 @@ IGS023_FG fg(
     .color_out(fg_color),
     .vram_addr(fg_vram_addr),
     .vram_din(vram_din),
-    .vram_master(fg_vram_master),
+    .real_vram_master(fg_real_vram_master),
+    .fpga_vram_master(fg_fpga_vram_master),
     .rom_master(fg_rom_master),
     .rom_address(fg_rom_address),
     .rom_data(tile_rom_data),
     .rom_req(fg_rom_req),
+    .secondary_rom_req(bg_rom_req),
     .rom_ack(tile_rom_ack)
 );
 
@@ -259,14 +262,14 @@ always_ff @(posedge clk) begin
 end
 
 always_comb begin
-    vram_addr = fg_vram_master ? fg_vram_addr : bg_vram_addr;
+    vram_addr = fg_fpga_vram_master ? fg_vram_addr : bg_vram_addr;
     vram_we_n = 1;
 
     pal_addr  = color_addr;
     pal_we_l_n = 1;
     pal_we_u_n = 1;
 
-    if (~fg_vram_master & ~bg_vram_master) begin
+    if (~fg_real_vram_master & ~bg_vram_master) begin
         if (is_vram_access && ram_access == 2'd2) begin
             vram_addr = {cpu_addr[14:1], 1'b0};
             vram_we_n = cpu_rw;
@@ -371,7 +374,7 @@ always @(posedge clk) begin
         end
 
         if (ce_pixel) begin
-            if (~fg_vram_master & ~bg_vram_master) begin
+            if (~fg_real_vram_master & ~bg_vram_master) begin
                 if (is_vram_access) begin
                     if (ram_access == 2'd2) begin
                         cpu_dout[15:8] <= vram_din;
@@ -390,7 +393,7 @@ always @(posedge clk) begin
                 end
             end
 
-            if (ram_pending & ~fg_vram_master & ~bg_vram_master) begin
+            if (ram_pending & ~fg_real_vram_master & ~bg_vram_master) begin
                 ram_access <= 2'd2;
                 ram_pending <= 0;
             end

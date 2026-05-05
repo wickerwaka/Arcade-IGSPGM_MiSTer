@@ -9,6 +9,10 @@ enum Game : uint8_t
     GAME_TESTBIOS,
     GAME_PGM_TEST,
     GAME_ESPGALBL,
+    GAME_KETBL,
+    GAME_DDPDOJBLKBL,
+    GAME_KOVBL,
+    GAME_KOVPLUSBL,
 
     N_GAMES,
 

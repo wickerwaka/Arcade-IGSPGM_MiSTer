@@ -14,14 +14,16 @@ module IGS023_FG(
     // VRAM interface
     output logic [14:0] vram_addr,
     input        [7:0]  vram_din,
-    output              vram_master,
+    output              fpga_vram_master, // on FPGA this is when we really own the bus, we give it up early for the BG to access
+    output              real_vram_master, // on real hardware this is when the FG would own the VRAM bus
     
     // ROM interface
     output            rom_master,
     output reg [23:0] rom_address,
     input      [31:0] rom_data,
     output reg        rom_req,
-    input             rom_ack
+    input             rom_ack,
+    input             secondary_rom_req
 );
 
 // Reads 57 FG tiles during hblank and fills a line buffer with data
@@ -37,7 +39,8 @@ typedef enum logic[2:0] {
 read_state_t read_state = READ0;
 
 reg reading_vram;
-assign vram_master = reading_vram;
+assign real_vram_master = reading_vram;
+assign fpga_vram_master = reading_vram && (read_state != DONE);
 assign rom_master = reading_vram && (read_state != DONE);
 
 reg [6:0] vram_row_addr;
@@ -70,7 +73,7 @@ always_ff @(posedge clk) begin
         read_counter <= 0;
         buffer_idx <= 0;
         pixel_idx <= x[2:0];
-        rom_req <= rom_ack;
+        rom_req <= secondary_rom_req;
         first_read <= 1;
     end else if (reading_vram) begin
         if (ce_33m) begin
@@ -118,13 +121,15 @@ always_ff @(posedge clk) begin
                 end
             end
             ROM_REQ: begin
-                rom_address <= { 3'd0, tile_code, tile_attrib[7] ? ~y[2:0] : y[2:0], 2'd0 };
-                rom_req <= ~rom_req;
-                read_state <= READ0;
-                flip_x <= tile_attrib[6];
-                palette <= tile_attrib[5:1];
+                if (rom_req == rom_ack) begin // ensure bg rom request has finished
+                    rom_address <= { 3'd0, tile_code, tile_attrib[7] ? ~y[2:0] : y[2:0], 2'd0 };
+                    rom_req <= ~rom_req;
+                    read_state <= READ0;
+                    flip_x <= tile_attrib[6];
+                    palette <= tile_attrib[5:1];
+                end
             end
-            DONE: begin end
+            DONE: begin rom_req <= secondary_rom_req; end
             default: read_state <= DONE;
         endcase
     end else if (ce_pixel & scan_active) begin
