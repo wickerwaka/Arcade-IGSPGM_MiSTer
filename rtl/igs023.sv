@@ -98,6 +98,7 @@ reg [15:0] sprite_data[256 * 8];
 reg [15:0] zoom_table[32];
 reg [15:0] ctrl[16];
 reg dma_start;
+logic debug_sprite_dma_disable /* verilator public_flat */;
 
 wire [15:0] bg_x = ctrl[3];
 wire [15:0] bg_y = ctrl[2];
@@ -304,6 +305,7 @@ always @(posedge clk) begin
         ram_pending <= 0;
         ram_access <= 0;
         dma_start <= 0;
+        debug_sprite_dma_disable <= 0;
         irq6 <= 0;
         irq4 <= 0;
     end begin
@@ -335,7 +337,7 @@ always @(posedge clk) begin
 
             ctrl[7] <= ctrl[7] + 1;
 
-            if (ctrl[7] == 221 && dma_en) begin
+            if (ctrl[7] == 221 && dma_en && !debug_sprite_dma_disable) begin
                 dma_start <= 1;
             end
 
@@ -373,11 +375,27 @@ always @(posedge clk) begin
                     endcase
                 end
                 dtack_n <= 0;
-            end else if (is_vram_access | is_pal_access) begin
+            end else if ((is_vram_access | is_pal_access) && !debug_sprite_dma_disable) begin
                 ram_pending <= 1;
              end
         end else if (cpu_cs_n) begin
             dtack_n <= 1;
+        end
+
+        if (~cpu_cs_n && (is_vram_access | is_pal_access)) begin
+            if (debug_sprite_dma_disable) begin
+                // When the sprite debugger freezes DMA, also freeze CPU-side
+                // VRAM/palette writes so the scene does not keep changing
+                // under edited sprite instance data. Hold DTACK deasserted to
+                // stall the 68000 until updates are resumed.
+                ram_pending <= 0;
+                ram_access <= 0;
+                dtack_n <= 1;
+            end else if (!ram_pending && ram_access == 0 && dtack_n) begin
+                // If an access was already stalled while debugging, start it
+                // after the debugger resumes even though there is no new CS edge.
+                ram_pending <= 1;
+            end
         end
 
         if (ce_pixel) begin

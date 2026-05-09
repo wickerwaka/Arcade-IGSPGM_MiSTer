@@ -42,13 +42,13 @@ typedef enum bit [4:0] {
 dma_state_t dma_state = DMA_IDLE;
 reg [2:0] sprite_component_index;
 reg [8:0] sprite_index;
-reg [8:0] sprite_count;
+reg [8:0] sprite_count /* verilator public_flat */;
 
-reg [15:0] sprite_d0[256];
-reg [15:0] sprite_d1[256];
-reg [15:0] sprite_d2[256];
-reg [15:0] sprite_d3[256];
-reg [15:0] sprite_d4[256];
+reg [15:0] sprite_d0[256] /* verilator public_flat */;
+reg [15:0] sprite_d1[256] /* verilator public_flat */;
+reg [15:0] sprite_d2[256] /* verilator public_flat */;
+reg [15:0] sprite_d3[256] /* verilator public_flat */;
+reg [15:0] sprite_d4[256] /* verilator public_flat */;
 
 reg [10:0] spr_x;
 reg [4:0] spr_x_scale;
@@ -62,7 +62,7 @@ reg spr_y_flip;
 reg [5:0] spr_width;
 reg [8:0] spr_height;
 
-wire [9:0] spr_y_end = spr_y + { 1'b0, spr_height };
+wire [9:0] spr_y_end = spr_y + ( { 1'b0, spr_height } - 10'd1 );
 
 typedef struct
 {
@@ -386,7 +386,7 @@ always_ff @(posedge clk) begin
                     end
 
                     if ((tmp_x + 1) == spr_width) begin
-                        if ((spr.line + 1) == spr_y_end) begin
+                        if (spr.line == spr_y_end) begin
                             spr.active <= 0;
                             dma_state <= PRESCAN_NEXT; // override BROM_WAIT state
                         end
@@ -448,7 +448,7 @@ always_ff @(posedge clk) begin
                 dma_state <= DRAW_SPAN;
                 if (tmp_x == spr_width) begin
                     spr.line <= spr.line + 1;
-                    if ((spr.line + 1) == spr_y_end) begin
+                    if (spr.line == spr_y_end) begin
                         spr.active <= 0;
                     end
                     dma_state <= DRAW_ROW_END;
