@@ -10,6 +10,7 @@
 #include "sim_ddr.h"
 #include "sim_video.h"
 #include "sim_audio_capture.h"
+#include "sim_ics2115_ui.h"
 #include "testrom_gui.h"
 #include "gfx_cache.h"
 #include "m68k.h"
@@ -66,6 +67,7 @@ void SimCore::Init()
 
     mGfxCache = std::make_unique<GfxCache>();
     mAudioCapture = std::make_unique<SimAudioCapture>();
+    Ics2115DebugUiReset();
     GetTestRomGuiWindow().Reset();
     gPrevVblank = false;
 
@@ -117,6 +119,7 @@ TickResult SimCore::TickOneCycle()
                             static_cast<int16_t>(mTop->rootp->PGM_SIGNAL(ics2115_audio_left)),
                             static_cast<int16_t>(mTop->rootp->PGM_SIGNAL(ics2115_audio_right)));
     }
+    Ics2115DebugUiTick();
 
     const bool vblank = mTop->vblank != 0;
     if (vblank && !gPrevVblank)
@@ -208,6 +211,7 @@ void SimCore::Shutdown()
     mDDRMemory.reset();
     mVideo.reset();
     mSignalWatchpointCallback = nullptr;
+    Ics2115DebugUiReset();
     GetTestRomGuiWindow().Reset();
     gPrevVblank = false;
 }

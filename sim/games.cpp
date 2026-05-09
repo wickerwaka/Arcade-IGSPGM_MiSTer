@@ -305,13 +305,14 @@ static void LoadEspgalbl()
     gSimCore.mSDRAM->LoadData16be("espgaluda_u8.bin", CART_PROG_ROM_SDR_BASE, 2);
     gSimCore.mSDRAM->LoadData("cave_t04801w064.u19", CART_TILE_ROM_SDR_BASE, 1);
     gSimCore.mSDRAM->LoadData("cave_b04801w064.u1", CART_B_ROM_SDR_BASE, 1);
+    gSimCore.mSDRAM->LoadData("cave_w04801b032.u17", CART_MUSIC_ROM_SDR_BASE, 1);
     gSimCore.mDDRMemory->LoadData("cave_a04801w064.u7", CART_A_ROM_DDR_BASE, 1);
     gSimCore.mDDRMemory->LoadData("cave_a04802w064.u8", CART_A_ROM_DDR_BASE + 0x0800000, 1);
 
     gSimCore.mTop->rootp->sim_top__DOT__cart_present = 1;
     gSimCore.mTop->rootp->sim_top__DOT__cart_prog_base = 0;
     gSimCore.mTop->rootp->sim_top__DOT__cart_tile_base = 0x180000;
-    gSimCore.mTop->rootp->sim_top__DOT__cart_music_base = 0;
+    gSimCore.mTop->rootp->sim_top__DOT__cart_music_base = 0x400000;
 
     gLoadedGameShortName = "espgalbl";
     gSimCore.SetGame(GAME_PGM);

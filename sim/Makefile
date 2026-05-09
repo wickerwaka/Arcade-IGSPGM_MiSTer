@@ -39,6 +39,7 @@ SRCS = imgui/imgui.cpp \
 		sim_audio_capture.cpp \
 		testrom_gui.cpp \
 		sim_ui.cpp \
+		sim_ics2115_ui.cpp \
 		sim_hw_ui.cpp \
 		sim_video.cpp \
 		sim_controller.cpp \

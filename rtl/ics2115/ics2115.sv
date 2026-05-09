@@ -159,6 +159,10 @@ module ics2115
     logic signed [23:0] acc_left;
     logic signed [23:0] acc_right;
 
+    // Last per-voice sample contributions for simulator/debug UI.
+    logic signed [23:0] debug_voice_sample_left [0:NUM_VOICES-1] /* verilator public_flat */;
+    logic signed [23:0] debug_voice_sample_right [0:NUM_VOICES-1] /* verilator public_flat */;
+
     // Sequencer output signals for voice write-back
     logic        seq_voice_wr;      // pulse: write back voice state
     logic [4:0]  seq_wr_idx;        // which voice to write back
@@ -231,6 +235,10 @@ module ics2115
             seq_voice_wr  <= 1'b0;
             seq_wr_idx    <= 5'd0;
             seq_wr_data   <= '0;
+            for (int i = 0; i < NUM_VOICES; i++) begin
+                debug_voice_sample_left[i] <= 24'sd0;
+                debug_voice_sample_right[i] <= 24'sd0;
+            end
         end else begin
             // Defaults
             osc_start    <= 1'b0;
@@ -265,9 +273,11 @@ module ics2115
                     seq_wr_idx   <= seq_voice_idx;
                     seq_wr_data  <= osc_voice_out;
 
-                    // Accumulate audio
+                    // Accumulate audio and keep the latest contribution for debug UI.
                     acc_left  <= acc_left  + osc_audio_left;
                     acc_right <= acc_right + osc_audio_right;
+                    debug_voice_sample_left[seq_voice_idx] <= osc_audio_left;
+                    debug_voice_sample_right[seq_voice_idx] <= osc_audio_right;
 
                     if (seq_voice_idx >= active_osc) begin
                         seq_state <= SEQ_OUTPUT;

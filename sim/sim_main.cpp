@@ -118,6 +118,7 @@ int main(int argc, char **argv)
         gSimCore.mTop->pause = gSimCore.mSystemPause;
         gSimCore.mTop->joystick_p1 = ImguiGetButtons() & 0xffff;
         gSimCore.mTop->start = (ImguiGetButtons() >> 16) & 0xffff;
+        gSimCore.mTop->coin = (ImguiGetButtons() >> 16) & 0xffff;
 
         if (gSimCore.mSimulationRun || gSimCore.mSimulationStep)
         {
