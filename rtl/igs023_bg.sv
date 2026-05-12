@@ -43,9 +43,9 @@ reg [8:0] pixel_in_idx, pixel_out_idx;
 
 wire buffer_ready = (slot_increment[load_slot] + pixel_in_idx) < pixel_out_idx;
 
-typedef enum logic[3:0] {
+typedef enum logic[4:0] {
     READ_SCROLL0, READ_SCROLL1, READ_SCROLL2, APPLY_SCROLL,
-    READ0, READ1, READ2, READ3,
+    READ0, READ1, READ2, READ3, READ4, READ5, READ6,
     ROM_REQ0, ROM_WAIT0,
     ROM_WAIT1,
     ROM_WAIT2,
@@ -56,6 +56,7 @@ typedef enum logic[3:0] {
 
 state_t state = DONE;
 
+reg toggle = 0;
 assign vram_master = (state <= READ3);
 
 reg [14:0] scroll_addr;
@@ -261,6 +262,10 @@ always_ff @(posedge clk) begin
                 state <= ROM_REQ0;
             end
 
+            READ4: state <= READ5;
+            READ5: state <= READ6;
+            READ6: state <= ROM_REQ0;
+ 
             ROM_REQ0: begin
                 rom_address <= { tile_code[14:0], flip_y ? ~y[4:0] : y[4:0], 4'd0 }
                              + { 2'b0, tile_code[14:0], flip_y ? ~y[4:0] : y[4:0], 2'd0 }

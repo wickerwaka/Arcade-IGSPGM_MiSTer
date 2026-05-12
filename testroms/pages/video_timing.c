@@ -13,6 +13,7 @@ static u32 vblank_checkpoint;
 static bool en_sprite_dma;
 static bool en_irq4;
 static bool en_bus_master;
+static u8 sx = 0x10;
 
 typedef enum
 {
@@ -56,6 +57,8 @@ static void init()
     text_reset();
     set_default_palette();
 
+    memset(VRAM->bg, 0, sizeof(VRAM->bg));
+
     frame_count = 0;
     vblank_checkpoint = igs023_get_vblank_count();
     en_sprite_dma = false;
@@ -92,6 +95,9 @@ static void update()
         frame_count = 0;
         vblank_checkpoint = igs023_get_vblank_count();
     }
+    
+    if (gui_u8("SX", &sx, 0, 0x1f)) IGS023_BG_CTRL_SET(( IGS023_BG_CTRL_GET() & 0xffe0 ) | ( sx & 0x1f ));
+    
     if (gui_toggle("IRQ4", &en_irq4))
     {
         if (en_irq4)
@@ -143,7 +149,7 @@ static void update()
         textf("TEST COUNTS: %08u", simple_inc);
     }
 
-    if (gui_button("TEST VRAM WRITE"))
+    if (gui_button("TEST VRAM WRITE SM"))
     {
         u32 simple_inc = 0;
         volatile u16 *ptr = (volatile u16 *)VRAM->bg;
@@ -162,6 +168,27 @@ static void update()
         // PGM = 0x583ED
         textf("VRAM WRITES: %08u", simple_inc);
     }
+
+    if (gui_button("TEST VRAM WRITE LG"))
+    {
+        u32 simple_inc = 0;
+        volatile u16 *ptr = (volatile u16 *)VRAM->bg;
+        start_test(60);
+        while(test_active)
+        {
+            memset(ptr, 0xff, 16);
+            simple_inc++;
+        }
+
+        text_cursor(20, 19);
+        // Normal
+        // PGM = 0x42480 - 0x424E0
+        // FPGA = 0x04DD0
+        // Bus Master
+        // PGM = 0x583ED
+        textf("VRAM WRITES: %08u", simple_inc);
+    }
+
 
     gui_end();
 }

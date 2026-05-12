@@ -89,11 +89,6 @@ wire is_reg_access = cpu_addr[21:20] == 2'b11;
 wire is_vram_access = cpu_addr[21:20] == 2'b01;
 wire is_pal_access = cpu_addr[21:20] == 2'b10;
 
-reg ram_pending = 0;
-reg [1:0] ram_access = 0;
-wire vram_cpu_bus_free = ~fg_real_vram_master & ~bg_vram_master;
-reg vram_cpu_bus_free_d;
-
 reg [15:0] sprite_data[256 * 8];
 reg [15:0] zoom_table[32];
 reg [15:0] ctrl[16];
@@ -108,6 +103,14 @@ wire [15:0] ctrl_flags = ctrl[14];
 wire bg_en = 1; // ~ctrl_flags[12];
 wire fg_en = 1; // ~ctrl_flags[11];
 wire dma_en = ctrl_flags[0];
+wire bus_master = ctrl_flags[10];
+
+
+reg ram_pending = 0;
+reg [1:0] ram_access = 0;
+wire vram_cpu_bus_free = (~fg_real_vram_master & ~bg_vram_master) | bus_master;
+reg vram_cpu_bus_free_d;
+
 
 assign cpu_dtack_n = cpu_cs_n ? 0 : dtack_n;
 
@@ -274,20 +277,18 @@ always_comb begin
 
     if (vram_cpu_bus_free) begin
         if (is_vram_access && ram_access == 2'd2) begin
-            // VRAM stores words little-endian for the renderer.  CPU writes
-            // therefore go low-byte/even then high-byte/odd, but CPU reads
-            // must fetch high-byte/odd first so a 68000 word read matches the
-            // value previously written.
             vram_addr = {cpu_addr[14:1], cpu_rw};
             vram_we_n = cpu_rw;
         end else if (is_vram_access && ram_access == 2'd1) begin
             vram_addr = {cpu_addr[14:1], ~cpu_rw};
             vram_we_n = cpu_rw;
-        end else if (is_pal_access && |ram_access) begin
-            pal_addr = cpu_addr[12:0];
-            pal_we_l_n = cpu_lds_n | cpu_rw;
-            pal_we_u_n = cpu_uds_n | cpu_rw;
         end
+    end
+
+    if (is_pal_access && |ram_access) begin
+        pal_addr = cpu_addr[12:0];
+        pal_we_l_n = cpu_lds_n | cpu_rw;
+        pal_we_u_n = cpu_uds_n | cpu_rw;
     end
 end
 
@@ -398,7 +399,7 @@ always @(posedge clk) begin
             end
         end
 
-        if (ce_pixel) begin
+        if (ce_50m) begin
             if (vram_cpu_bus_free && vram_cpu_bus_free_d) begin
                 if (is_vram_access) begin
                     if (ram_access == 2'd2) begin
@@ -409,12 +410,14 @@ always @(posedge clk) begin
                         ram_access <= 0;
                         dtack_n <= 0;
                     end
-                end else if (is_pal_access) begin
-                    if (|ram_access) begin
-                        ram_access <= 0;
-                        dtack_n <= 0;
-                        cpu_dout <= pal_din;
-                    end
+                end
+            end
+
+            if (is_pal_access) begin
+                if (|ram_access) begin
+                    ram_access <= 0;
+                    dtack_n <= 0;
+                    cpu_dout <= pal_din;
                 end
             end
 

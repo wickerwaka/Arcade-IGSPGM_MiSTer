@@ -78,7 +78,7 @@ always_ff @(posedge clk) begin
     end else if (reading_vram) begin
         if (ce_33m) begin
             read_counter <= read_counter + 1;
-            if (read_counter == ((8 * 57) - 1)) begin
+            if (read_counter == (((8 * 58) + 4) - 1)) begin
                 reading_vram <= 0;
                 buffer_idx <= 0;
             end
