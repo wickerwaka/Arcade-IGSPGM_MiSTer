@@ -362,14 +362,14 @@ wire DTACKn = dtack_n;
 wire irq6;
 wire irq4;
 
-wire clocks_enabled = ~paused;
+wire clocks_enabled = ss_cpu_execute | ~paused;
 
 //////////////////////////////////
 //// CLOCK ENABLES
 jtframe_frac_cen #(2) cen_steady
 (
     .clk(clk),
-    .cen_in(clocks_enabled | ss_cpu_execute),
+    .cen_in(clocks_enabled),
     .n(10'd2),
     .m(10'd5),
     .cen({ce_dummy_10m, ce_20m}),
@@ -386,7 +386,7 @@ always_ff @(posedge clk) begin
     ce_cpu <= 0;
     ce_cpu_180 <= 0;
 
-    if (sdr_cpu_req == sdr_cpu_ack && (clocks_enabled | ss_cpu_execute)) begin
+    if (sdr_cpu_req == sdr_cpu_ack && clocks_enabled) begin
         if (ce_cpu_count[10:1] != ce_steady_count) begin
             ce_cpu <= ~ce_cpu_count[0];
             ce_cpu_180 <= ce_cpu_count[0];
@@ -398,7 +398,7 @@ end
 jtframe_frac_cen #(3) audio_cen
 (
     .clk(clk),
-    .cen_in(clocks_enabled | ss_cpu_execute),
+    .cen_in(1),
     .n(10'd464),
     .m(10'd685),
     .cen({ce_8m, ce_16m, ce_33m}),
@@ -917,7 +917,7 @@ tv80s z80(
 `endif
 
     .clk(clk),
-    .cen(ce_8m),
+    .cen(ce_8m & clocks_enabled),
     .reset_n(z80_reset_n),
     .wait_n(z80_wait_n),
     .int_n(z80_int_n),
