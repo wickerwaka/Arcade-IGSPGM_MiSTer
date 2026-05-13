@@ -803,7 +803,7 @@ IGS026_X igs026_x(
     .ics2115_ready
 );
 
-pgm_asic3 asic3(
+pgm_asic3 #(.SS_IDX(SSIDX_ASIC3)) asic3(
     .clk,
     .reset,
     .region(3'd0),
@@ -816,13 +816,7 @@ pgm_asic3 asic3(
     .cpu_rw(cpu_rw),
     .cpu_cs_n(asic3_cs_n),
 
-    .debug_reg(),
-    .debug_latch0(),
-    .debug_latch1(),
-    .debug_latch2(),
-    .debug_x(),
-    .debug_hilo(),
-    .debug_hold()
+    .ssbus(ssb[SSIDX_ASIC3])
 );
 
 V3021 v3021(

@@ -4,7 +4,9 @@
 // Converted from MAME src/mame/igs/pgmprot_orlegend.cpp
 // copyright-holders: Olivier Galibert, iq_132
 
-module pgm_asic3 (
+module pgm_asic3 #(
+    parameter int SS_IDX = -1
+)(
     input  logic        clk,
     input  logic        reset,
 
@@ -27,14 +29,7 @@ module pgm_asic3 (
     input  logic        cpu_rw,      // 1 = read, 0 = write
     input  logic        cpu_cs_n,
 
-    // Optional debug/inspection outputs.
-    output logic [7:0]  debug_reg,
-    output logic [7:0]  debug_latch0,
-    output logic [7:0]  debug_latch1,
-    output logic [7:0]  debug_latch2,
-    output logic [7:0]  debug_x,
-    output logic [15:0] debug_hilo,
-    output logic [15:0] debug_hold
+    ssbus_if.slave ssbus
 );
 
     logic [7:0]  asic3_reg;
@@ -45,18 +40,17 @@ module pgm_asic3 (
 
     logic write_active_d;
 
+    localparam int SS_WORD_COUNT = 3;
+    localparam int SS_WORD_REGS = 0;
+    localparam int SS_WORD_HILO = 1;
+    localparam int SS_WORD_HOLD = 2;
+
+    wire ss_access = ssbus.access(SS_IDX);
+
     wire access_active = !cpu_cs_n && (!cpu_uds_n || !cpu_lds_n);
     wire write_active  = access_active && !cpu_rw;
     wire write_pulse   = write_active && !write_active_d;
     wire command_write = cpu_addr[3:1] == 3'd0;
-
-    assign debug_reg    = asic3_reg;
-    assign debug_latch0 = asic3_latch[0];
-    assign debug_latch1 = asic3_latch[1];
-    assign debug_latch2 = asic3_latch[2];
-    assign debug_x      = asic3_x;
-    assign debug_hilo   = asic3_hilo;
-    assign debug_hold   = asic3_hold;
 
     function automatic logic bit_at16(input logic [15:0] value, input int index);
         if (index >= 0 && index < 16)
@@ -196,8 +190,37 @@ module pgm_asic3 (
             write_active_d <= 1'b0;
         end else begin
             write_active_d <= write_active;
+            ssbus.setup(SS_IDX, SS_WORD_COUNT[31:0], 2);
 
-            if (write_pulse) begin
+            if (ss_access) begin
+                if (ssbus.read) begin
+                    unique case (ssbus.addr)
+                        SS_WORD_REGS: ssbus.read_response(SS_IDX, {32'd0, asic3_latch[2], asic3_latch[1], asic3_latch[0], asic3_reg});
+                        SS_WORD_HILO: ssbus.read_response(SS_IDX, {32'd0, 8'd0, asic3_x, asic3_hilo});
+                        SS_WORD_HOLD: ssbus.read_response(SS_IDX, {32'd0, 16'd0, asic3_hold});
+                        default: ssbus.read_response(SS_IDX, 64'd0);
+                    endcase
+                end else if (ssbus.write) begin
+                    unique case (ssbus.addr)
+                        SS_WORD_REGS: begin
+                            asic3_reg <= ssbus.data[7:0];
+                            asic3_latch[0] <= ssbus.data[15:8];
+                            asic3_latch[1] <= ssbus.data[23:16];
+                            asic3_latch[2] <= ssbus.data[31:24];
+                        end
+                        SS_WORD_HILO: begin
+                            asic3_hilo <= ssbus.data[15:0];
+                            asic3_x <= ssbus.data[23:16];
+                        end
+                        SS_WORD_HOLD: begin
+                            asic3_hold <= ssbus.data[15:0];
+                        end
+                        default: begin
+                        end
+                    endcase
+                    ssbus.write_ack(SS_IDX);
+                end
+            end else if (write_pulse) begin
                 if (command_write) begin
                     asic3_reg <= cpu_din[7:0];
                 end else begin
