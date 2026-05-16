@@ -13,6 +13,9 @@ SDL_Renderer *gSdlRenderer;
 #define BTN_DOWN 0x0004
 #define BTN_UP 0x0008
 #define BTN_BTN1 0x0010
+#define BTN_BTN2 0x0020
+#define BTN_BTN3 0x0040
+#define BTN_BTN4 0x0080
 #define BTN_START 0x00010000
 
 static uint32_t gButtons;
@@ -131,8 +134,17 @@ bool ImguiBeginFrame()
                 case SDLK_1:
                     bits = BTN_START;
                     break;
-                case SDLK_LCTRL:
+                case SDLK_LSHIFT:
                     bits = BTN_BTN1;
+                    break;
+                case SDLK_z:
+                    bits = BTN_BTN2;
+                    break;
+                case SDLK_x:
+                    bits = BTN_BTN3;
+                    break;
+                case SDLK_c:
+                    bits = BTN_BTN4;
                     break;
                 }
 

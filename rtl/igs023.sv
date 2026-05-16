@@ -9,7 +9,7 @@ module IGS023 #(parameter SS_IDX=-1) (
     // CPU interface
     input [23:0] cpu_addr,
     input [15:0] cpu_din,
-    output reg [15:0] cpu_dout,
+    output [15:0] cpu_dout,
     input cpu_lds_n,
     input cpu_uds_n,
     input cpu_rw,
@@ -28,12 +28,12 @@ module IGS023 #(parameter SS_IDX=-1) (
     // VRAM interface
     output logic [14:0] vram_addr,
     input         [7:0] vram_din,
-    output        [7:0] vram_dout,
+    output logic  [7:0] vram_dout,
     output logic        vram_we_n,
    
     output logic [12:0] pal_addr,
     input        [15:0] pal_din,
-    output       [15:0] pal_dout,
+    output logic [15:0] pal_dout,
     output logic        pal_we_u_n,
     output logic        pal_we_l_n,
  
@@ -92,7 +92,9 @@ wire is_reg_access = cpu_addr[21:20] == 2'b11;
 wire is_vram_access = cpu_addr[21:20] == 2'b01;
 wire is_pal_access = cpu_addr[21:20] == 2'b10;
 
-reg [15:0] sprite_data[256 * 8];
+reg [15:0] cpu_dout_reg;
+assign cpu_dout = is_pal_access ? pal_din : cpu_dout_reg;
+
 reg [15:0] zoom_table[32];
 reg [15:0] ctrl[16];
 reg dma_start;
@@ -110,15 +112,22 @@ wire bus_master = ctrl_flags[10];
 
 
 reg ram_pending = 0;
-reg [1:0] ram_access = 0;
+
+typedef enum bit[2:0]
+{
+    RAM_ACCESS_DONE,
+    RAM_ACCESS_VRAM_HIGH_SETUP,
+    RAM_ACCESS_VRAM_HIGH_HOLD,
+    RAM_ACCESS_VRAM_LOW_SETUP,
+    RAM_ACCESS_VRAM_LOW_HOLD
+} ram_access_t;
+
+ram_access_t ram_access = RAM_ACCESS_DONE;
 wire vram_cpu_bus_free = (~fg_real_vram_master & ~bg_vram_master) | bus_master;
 reg vram_cpu_bus_free_d;
 
 
 assign cpu_dtack_n = cpu_cs_n ? 0 : dtack_n;
-
-assign pal_dout = cpu_din[15:0];
-assign vram_dout = vram_addr[0] ? cpu_din[15:8] : cpu_din[7:0]; // little endian ordering in vram
 
 // 0 is the start of blanking
 reg [8:0] vcnt;
@@ -273,26 +282,41 @@ end
 always_comb begin
     vram_addr = fg_fpga_vram_master ? fg_vram_addr : bg_vram_addr;
     vram_we_n = 1;
+    vram_dout = 0;
 
-    pal_addr  = color_addr;
-    pal_we_l_n = 1;
-    pal_we_u_n = 1;
-
-    if (vram_cpu_bus_free) begin
-        if (is_vram_access && ram_access == 2'd2) begin
-            vram_addr = {cpu_addr[14:1], cpu_rw};
-            vram_we_n = cpu_rw;
-        end else if (is_vram_access && ram_access == 2'd1) begin
-            vram_addr = {cpu_addr[14:1], ~cpu_rw};
-            vram_we_n = cpu_rw;
-        end
-    end
-
-    if (is_pal_access && |ram_access) begin
+    if (is_pal_access & ~cpu_cs_n) begin
         pal_addr = cpu_addr[12:0];
         pal_we_l_n = cpu_lds_n | cpu_rw;
         pal_we_u_n = cpu_uds_n | cpu_rw;
+        pal_dout = cpu_din;
+    end else begin
+        pal_addr  = color_addr;
+        pal_we_l_n = 1;
+        pal_we_u_n = 1;
+        pal_dout   = 0;
     end
+
+    case(ram_access)
+        RAM_ACCESS_DONE: begin end
+        
+        RAM_ACCESS_VRAM_HIGH_SETUP,
+        RAM_ACCESS_VRAM_HIGH_HOLD: begin
+            if (vram_cpu_bus_free) begin
+                vram_addr = {cpu_addr[14:1], 1'b1};
+                vram_we_n = cpu_rw;
+                vram_dout = cpu_din[15:8];
+            end
+        end
+
+        RAM_ACCESS_VRAM_LOW_SETUP,
+        RAM_ACCESS_VRAM_LOW_HOLD: begin
+            if (vram_cpu_bus_free) begin
+                vram_addr = {cpu_addr[14:1], 1'b0};
+                vram_we_n = cpu_rw;
+                vram_dout = cpu_din[7:0];
+            end
+        end
+    endcase
 end
 
 reg vblank_prev;
@@ -307,7 +331,7 @@ always @(posedge clk) begin
     if (reset) begin
         dtack_n <= 1;
         ram_pending <= 0;
-        ram_access <= 0;
+        ram_access <= RAM_ACCESS_DONE;
         dma_start <= 0;
         debug_sprite_dma_disable <= 0;
         irq6 <= 0;
@@ -366,8 +390,8 @@ always @(posedge clk) begin
             if (is_reg_access) begin
                 if (cpu_rw) begin
                     case(cpu_addr[15:12])
-                        1: cpu_dout <= zoom_table[cpu_addr[5:1]];
-                        default: cpu_dout <= ctrl[cpu_addr[15:12]];
+                        1: cpu_dout_reg <= zoom_table[cpu_addr[5:1]];
+                        default: cpu_dout_reg <= ctrl[cpu_addr[15:12]];
                     endcase
                 end else begin
                     case(cpu_addr[15:12])
@@ -382,54 +406,49 @@ always @(posedge clk) begin
                     endcase
                 end
                 dtack_n <= 0;
-            end else if ((is_vram_access | is_pal_access) && !debug_sprite_dma_disable) begin
+            end else if (is_vram_access && !debug_sprite_dma_disable) begin
                 ram_pending <= 1;
-             end
+            end else if (is_pal_access) begin
+                dtack_n <= 0;
+            end
         end else if (cpu_cs_n) begin
             dtack_n <= 1;
         end
 
-        if (~cpu_cs_n && (is_vram_access | is_pal_access)) begin
-            if (debug_sprite_dma_disable) begin
-                // When the sprite debugger freezes DMA, also freeze CPU-side
-                // VRAM/palette writes so the scene does not keep changing
-                // under edited sprite instance data. Hold DTACK deasserted to
-                // stall the 68000 until updates are resumed.
-                ram_pending <= 0;
-                ram_access <= 0;
-                dtack_n <= 1;
-            end else if (!ram_pending && ram_access == 0 && dtack_n) begin
-                // If an access was already stalled while debugging, start it
-                // after the debugger resumes even though there is no new CS edge.
-                ram_pending <= 1;
-            end
-        end
-
         if (ce_50m) begin
-            if (vram_cpu_bus_free && vram_cpu_bus_free_d) begin
-                if (is_vram_access) begin
-                    if (ram_access == 2'd2) begin
-                        cpu_dout[15:8] <= vram_din;
-                        ram_access <= 2'd1;
-                    end else if (ram_access == 2'd1) begin
-                        cpu_dout[7:0] <= vram_din;
-                        ram_access <= 0;
-                        dtack_n <= 0;
+            if (vram_cpu_bus_free) begin
+                case(ram_access)
+                    RAM_ACCESS_DONE: begin
+                        if (ram_pending) begin
+                            ram_pending <= 0;
+                            if (~cpu_uds_n) ram_access <= RAM_ACCESS_VRAM_HIGH_SETUP;
+                            else ram_access <= RAM_ACCESS_VRAM_LOW_SETUP;
+                        end
                     end
-                end
-            end
 
-            if (is_pal_access) begin
-                if (|ram_access) begin
-                    ram_access <= 0;
-                    dtack_n <= 0;
-                    cpu_dout <= pal_din;
-                end
-            end
+                    RAM_ACCESS_VRAM_HIGH_HOLD: begin
+                        if (vram_cpu_bus_free_d) begin
+                            cpu_dout_reg[15:8] <= vram_din;
+                            if (~cpu_lds_n) begin
+                                ram_access <= RAM_ACCESS_VRAM_LOW_SETUP;
+                            end else begin
+                                ram_access <= RAM_ACCESS_DONE;
+                                dtack_n <= 0;
+                            end
+                        end
+                    end
 
-            if (ram_pending & vram_cpu_bus_free) begin
-                ram_access <= 2'd2;
-                ram_pending <= 0;
+                    RAM_ACCESS_VRAM_LOW_HOLD: begin
+                        if (vram_cpu_bus_free_d) begin
+                            cpu_dout_reg[7:0] <= vram_din;
+                            ram_access <= RAM_ACCESS_DONE;
+                            dtack_n <= 0;
+                        end
+                    end
+
+                    RAM_ACCESS_VRAM_HIGH_SETUP: if (vram_cpu_bus_free_d) ram_access <= RAM_ACCESS_VRAM_HIGH_HOLD;
+                    RAM_ACCESS_VRAM_LOW_SETUP: if (vram_cpu_bus_free_d) ram_access <= RAM_ACCESS_VRAM_LOW_HOLD;
+                endcase
             end
         end // ce_pixel
     end
