@@ -25,7 +25,7 @@ module IGS023_Buffer(
     ddr_if.to_host ddr
 );
 
-localparam int NUM_LINE_BUFFERS = 8'd8;
+localparam int NUM_LINE_BUFFERS = 8'd16;
 localparam int LINE_BUF_BITS = $clog2(NUM_LINE_BUFFERS);
 
 initial begin
@@ -65,24 +65,26 @@ assign wq_cur = wq_fifo0;
 
 wire valid_wr = (wr0 | wr1) && (column < 448);
 
-reg [13:0] write_queue_head = 0;
-reg [13:0] write_queue_tail = 0;
-reg [13:0] write_queue_fetch = 0;
+localparam QUEUE_DEPTH = 12;
+
+reg [QUEUE_DEPTH:0] write_queue_head = 0;
+reg [QUEUE_DEPTH:0] write_queue_tail = 0;
+reg [QUEUE_DEPTH:0] write_queue_fetch = 0;
 reg        write_queue_fetch_pending = 0;
 reg  [1:0] write_queue_fifo_count = 0;
 
-assign ready = (write_queue_head - write_queue_tail) < 8190;
+assign ready = (write_queue_head - write_queue_tail) < ((1 << QUEUE_DEPTH) - 2);
 
-dualport_ram_unreg #(.WIDTH($bits(write_entry_t)), .WIDTHAD(13)) write_queue(
+dualport_ram_unreg #(.WIDTH($bits(write_entry_t)), .WIDTHAD(QUEUE_DEPTH)) write_queue(
     .clock_a(clk),
     .wren_a(valid_wr),
-    .address_a(write_queue_head[12:0]),
+    .address_a(write_queue_head[QUEUE_DEPTH-1:0]),
     .data_a(wq_in),
     .q_a(),
 
     .clock_b(clk),
     .wren_b(0),
-    .address_b(write_queue_fetch[12:0]),
+    .address_b(write_queue_fetch[QUEUE_DEPTH-1:0]),
     .data_b(0),
     .q_b(wq_fetch_data)
 );
