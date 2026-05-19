@@ -103,7 +103,7 @@ $(BUILD_DIR)/$(TARGET).zip: $(BUILT_BINS)
 
 debug: $(BUILT_BINS)
 	mkdir -p mame
-	cd mame && ../$(MAME) -window -nomaximize -resolution0 640x480 -prescale 2 -debug -debugscript ../debugscript.txt -rompath "$(ROMPATH)" kovsh
+	cd mame && ../$(MAME) -window -nomaximize -resolution0 640x480 -prescale 2 -wavwrite mame.wav -debug -debugscript ../debugscript.txt -rompath "$(ROMPATH)" kovsh
 
 run: $(BUILT_BINS)
 	mkdir -p mame

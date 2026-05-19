@@ -142,6 +142,17 @@ float NormalizeAudio16(int16_t left, int16_t right)
     return ClampFloat(mono, -1.0f, 1.0f);
 }
 
+const char *SampleFormatName(uint8_t oscConf)
+{
+    // OscConf bit 0 is u-law, bit 2 is 8-bit PCM; otherwise samples are 16-bit PCM.
+    // The oscillator decode path checks u-law first if both bits are set.
+    if (oscConf & 0x02)
+        return "16-bit";
+    if (oscConf & 0x01)
+        return "u-law";
+    return "8-bit";
+}
+
 template <int SampleCount>
 void PlotHistory(const char *id, const RingHistory<SampleCount> &history, ImVec2 size, float minValue, float maxValue)
 {
@@ -323,7 +334,7 @@ class Ics2115Window : public Window
 
         ImGui::Separator();
 
-        if (ImGui::BeginTable("ics_voices", 20, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
+        if (ImGui::BeginTable("ics_voices", 21, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
                               ImVec2(0, 420)))
         {
             ImGui::TableSetupScrollFreeze(0, 1);
@@ -333,6 +344,7 @@ class Ics2115Window : public Window
             ImGui::TableSetupColumn("Wave", ImGuiTableColumnFlags_WidthFixed, 72.0f);
             ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 72.0f);
             ImGui::TableSetupColumn("OConf");
+            ImGui::TableSetupColumn("Fmt");
             ImGui::TableSetupColumn("VCtrl");
             ImGui::TableSetupColumn("Ctl");
             ImGui::TableSetupColumn("FC");
@@ -359,6 +371,7 @@ class Ics2115Window : public Window
                 ImGui::TableNextColumn(); PlotWaveHistory("##wave", gHistory.mVoiceWave[voice.mIndex], ImVec2(64.0f, 22.0f));
                 ImGui::TableNextColumn(); PlotHistory("##vol", gHistory.mVoiceVolume[voice.mIndex], ImVec2(64.0f, 22.0f), 0.0f, 1.0f);
                 ImGui::TableNextColumn(); ImGui::Text("%02x", voice.mOscConf);
+                ImGui::TableNextColumn(); ImGui::TextUnformatted(SampleFormatName(voice.mOscConf));
                 ImGui::TableNextColumn(); ImGui::Text("%02x", voice.mVolCtrl);
                 ImGui::TableNextColumn(); ImGui::Text("%02x", voice.mOscCtl);
                 ImGui::TableNextColumn(); ImGui::Text("%04x", voice.mOscFc);

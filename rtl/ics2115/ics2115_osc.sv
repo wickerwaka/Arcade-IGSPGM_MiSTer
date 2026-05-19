@@ -100,6 +100,24 @@ module ics2115_osc
     // Volume envelope working registers
     logic [14:0] vol_add;               // vol_incr[5:0] << 9, set in ST_VOL_ENV_UPDATE
 
+    logic osc_conf_8bit;
+    logic osc_conf_ulaw;
+    logic osc_conf_8bit_linear;
+
+    always_comb begin
+        osc_conf_8bit = 0;
+        osc_conf_ulaw = 0;
+        osc_conf_8bit_linear = 0;
+
+        if (~v.osc_conf[OSC_EIGHTBIT]) begin
+            osc_conf_8bit = 1;
+            if (v.osc_conf[OSC_ULAW])
+                osc_conf_ulaw = 1;
+            else
+                osc_conf_8bit_linear = 1;
+        end
+    end
+
     // =========================================================================
     // Combinational signals for boundary/interpolation/mix
     // =========================================================================
@@ -129,10 +147,10 @@ module ics2115_osc
     assign interp_fract = v.osc_acc[8:0];
 
     // Interpolation: combinational from sample1, sample2, fract
-    logic signed [15:0] interp_diff;
+    logic signed [16:0] interp_diff;
     logic signed [24:0] interp_raw;
     assign interp_diff = sample2 - sample1;
-    assign interp_raw  = ($signed({1'b0, sample1}) <<< 9) +
+    assign interp_raw  = ($signed({sample1[15], sample1}) <<< 9) +
                          (interp_diff * $signed({1'b0, interp_fract}));
 
     // Mix: sample × volume (signed × unsigned)
@@ -280,7 +298,7 @@ module ics2115_osc
                     begin
                         next_addr <= v.osc_start[28:9];
                     end else begin
-                        if (v.osc_conf[OSC_EIGHTBIT] || v.osc_conf[OSC_ULAW])
+                        if (osc_conf_8bit)
                             next_addr <= v.osc_acc[28:9] + 20'd1;
                         else
                             next_addr <= v.osc_acc[28:9] + 20'd2;
@@ -340,19 +358,19 @@ module ics2115_osc
                         vright <= 16'd0;
 
                     // Decode sample1 from ROM data
-                    if (v.osc_conf[OSC_ULAW]) begin
+                    if (osc_conf_ulaw) begin
                         // µ-law: extract byte, send to decode table
-                        if (cur_addr[0])
+                        if (~cur_addr[0])
                             ulaw_tbl_addr <= rom_data[15:8];
                         else
                             ulaw_tbl_addr <= rom_data[7:0];
                         // sample1 will be latched from ulaw_tbl_data next cycle
-                    end else if (v.osc_conf[OSC_EIGHTBIT]) begin
+                    end else if (osc_conf_8bit_linear) begin
                         // 8-bit signed: extract byte, sign-extend << 8
-                        if (cur_addr[0])
-                            sample1 <= {{8{rom_data[15]}}, rom_data[15:8]};
+                        if (~cur_addr[0])
+                            sample1 <= $signed({ rom_data[15:8], {8{rom_data[8]}}});
                         else
-                            sample1 <= {{8{rom_data[7]}}, rom_data[7:0]};
+                            sample1 <= $signed({ rom_data[7:0],  {8{rom_data[0]}}});
                     end else begin
                         // 16-bit: ROM word is the sample (word-aligned assumption)
                         sample1 <= $signed(rom_data);
@@ -369,25 +387,21 @@ module ics2115_osc
                 // ─────────────────────────────────────────────────────────────
                 ST_SAMPLE_WAIT: begin
                     // For µ-law: sample1 decode is ready (combinational table)
-                    if (v.osc_conf[OSC_ULAW]) begin
+                    if (osc_conf_ulaw) begin
                         sample1 <= ulaw_tbl_data;
                         // Now decode sample2
-                        if (next_addr[0])
+                        if (~next_addr[0])
                             ulaw_tbl_addr <= rom_data[15:8];
                         else
                             ulaw_tbl_addr <= rom_data[7:0];
-                    end
-
-                    // Decode sample2 from ROM data
-                    if (!v.osc_conf[OSC_ULAW]) begin
-                        if (v.osc_conf[OSC_EIGHTBIT]) begin
-                            if (next_addr[0])
-                                sample2 <= {{8{rom_data[15]}}, rom_data[15:8]};
-                            else
-                                sample2 <= {{8{rom_data[7]}}, rom_data[7:0]};
-                        end else begin
-                            sample2 <= $signed(rom_data);
-                        end
+                    end else if (osc_conf_8bit_linear) begin
+                        // Decode sample2 from ROM data
+                        if (~next_addr[0])
+                            sample2 <= $signed({ rom_data[15:8], {8{rom_data[8]}}});
+                        else
+                            sample2 <= $signed({ rom_data[7:0],  {8{rom_data[0]}}});
+                    end else begin
+                        sample2 <= $signed(rom_data);
                     end
                 end
 
@@ -397,7 +411,7 @@ module ics2115_osc
                 // ─────────────────────────────────────────────────────────────
                 ST_INTERPOLATE: begin
                     // For µ-law: latch sample2 from table and use for interp
-                    if (v.osc_conf[OSC_ULAW]) begin
+                    if (osc_conf_ulaw) begin
                         sample2 <= ulaw_tbl_data;
                         // Use ulaw_tbl_data directly in combinational interp
                         // Recalculate with correct sample2
@@ -545,7 +559,7 @@ module ics2115_osc
                         end
 
                         // 8-bit mode exception: skip wrap logic (per MAME)
-                        if (!v.osc_conf[OSC_EIGHTBIT]) begin
+                        if (!osc_conf_8bit) begin
                             if (v.vol_ctrl[VOL_LOOP]) begin
                                 if (!v.vol_ctrl[VOL_BIDIR]) begin
                                     // Unidirectional loop: wrap around

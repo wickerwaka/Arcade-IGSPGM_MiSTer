@@ -7,6 +7,7 @@
 #include "../igs023.h"
 #include "../color.h"
 #include "../input.h"
+#include "../gui.h"
 #include "../pgm_bios_z80_data.h"
 
 #define RESULT_MAGIC 0x5a53 /* 'ZS' */
@@ -17,7 +18,6 @@
 #define Z80_CONTROL_REG (*(volatile u16 *)0x00c0000a)
 #define Z80_LATCH3      (*(volatile u16 *)0x00c0000c)
 
-#define Z80_RAM8        ((volatile u8 *)0x00c10000)
 #define Z80_RAM16       ((volatile u16 *)0x00c10000)
 
 #define Z80_CONTROL_BUS_68K 0x45d3
@@ -32,7 +32,9 @@
 
 #define WAVE_ENTRY_SIZE 12
 #define DEFAULT_WAVE_COUNT (sizeof(default_z80_wave_table_blob) / WAVE_ENTRY_SIZE)
-#define AUTO_PLAY_FRAMES 90
+#define DEFAULT_WAVE_INDEX 6
+#define DEFAULT_REPEAT_COUNT 1
+#define DEFAULT_REPEAT_DELAY_FRAMES 3
 
 typedef struct
 {
@@ -41,6 +43,10 @@ typedef struct
     u16 verify_errors;
     u16 commands_sent;
     u16 selected_wave;
+    u16 repeat_count;
+    u16 repeat_delay_frames;
+    u16 playing;
+    u16 done;
     u16 latch1;
     u16 latch2;
     u16 latch3;
@@ -56,8 +62,15 @@ static u16 initialized;
 static u16 verify_errors;
 static u16 commands_sent;
 static u16 selected_wave;
+static u16 repeat_count;
+static u16 repeat_delay_frames;
 static u16 phase;
+static u16 playing;
+static u16 done;
 static u32 frame_count;
+static u32 last_play_frame;
+static u32 next_play_frame;
+static u16 plays_sent;
 static u8 sequence_mod64;
 static u8 latch_low_shadow;
 static u8 latch3_high_shadow;
@@ -82,27 +95,61 @@ static void z80_bus_release(void)
     delay_short(16);
 }
 
-static void z80_write_byte(u16 offset, u8 value)
-{
-    Z80_RAM8[offset] = value;
-}
-
 static u8 z80_read_byte(u16 offset)
 {
-    return Z80_RAM8[offset];
+    u16 word = Z80_RAM16[offset >> 1];
+    return (offset & 1) ? (u8)word : (u8)(word >> 8);
+}
+
+static void z80_write_byte(u16 offset, u8 value)
+{
+    u16 index = offset >> 1;
+    u16 word = Z80_RAM16[index];
+
+    if (offset & 1)
+    {
+        word = (u16)((word & 0xff00) | value);
+    }
+    else
+    {
+        word = (u16)((word & 0x00ff) | ((u16)value << 8));
+    }
+
+    Z80_RAM16[index] = word;
 }
 
 static void z80_write_be_word(u16 offset, u16 value)
 {
-    Z80_RAM8[offset + 0] = (u8)(value >> 8);
-    Z80_RAM8[offset + 1] = (u8)value;
+    if (offset & 1)
+    {
+        z80_write_byte(offset + 0, (u8)(value >> 8));
+        z80_write_byte(offset + 1, (u8)value);
+    }
+    else
+    {
+        Z80_RAM16[offset >> 1] = value;
+    }
 }
 
 static void z80_write_bytes(u16 offset, const u8 *src, u16 size)
 {
-    for (u16 i = 0; i < size; i++)
+    u16 i = 0;
+
+    if ((offset & 1) && size)
     {
-        z80_write_byte(offset + i, src[i]);
+        z80_write_byte(offset, src[0]);
+        offset++;
+        i++;
+    }
+
+    for (; (u16)(i + 1) < size; i += 2, offset += 2)
+    {
+        Z80_RAM16[offset >> 1] = ((u16)src[i] << 8) | src[i + 1];
+    }
+
+    if (i < size)
+    {
+        z80_write_byte(offset, src[i]);
     }
 }
 
@@ -121,6 +168,10 @@ static void publish_status(void)
     test_status.verify_errors = verify_errors;
     test_status.commands_sent = commands_sent;
     test_status.selected_wave = selected_wave;
+    test_status.repeat_count = repeat_count;
+    test_status.repeat_delay_frames = repeat_delay_frames;
+    test_status.playing = playing;
+    test_status.done = done;
     test_status.latch1 = Z80_LATCH1;
     test_status.latch2 = Z80_LATCH2;
     test_status.latch3 = Z80_LATCH3;
@@ -137,9 +188,9 @@ static void upload_wave_table(void)
     z80_write_be_word(Z80_WAVE_COUNT_OFFSET, (u16)(DEFAULT_WAVE_COUNT + 1));
     z80_write_be_word(Z80_MIDI_COUNT_OFFSET, 0);
 
-    for (u16 i = 0; i < WAVE_ENTRY_SIZE; i++)
+    for (u16 i = 0; i < WAVE_ENTRY_SIZE; i += 2)
     {
-        z80_write_byte(Z80_WAVE_TABLE_OFFSET + i, 0);
+        z80_write_be_word(Z80_WAVE_TABLE_OFFSET + i, 0);
     }
 
     z80_write_bytes(Z80_WAVE_TABLE_OFFSET + WAVE_ENTRY_SIZE,
@@ -211,10 +262,8 @@ static void z80_send_mailbox_command(u8 b0, u8 b1, u8 b2, u8 b3)
     latch3_high_shadow = 0;
     Z80_LATCH3 = (u16)(latch_low_shadow & 0x0f);
 
-    z80_write_byte(Z80_MAILBOX_OFFSET + 0, b0);
-    z80_write_byte(Z80_MAILBOX_OFFSET + 1, b1);
-    z80_write_byte(Z80_MAILBOX_OFFSET + 2, b2);
-    z80_write_byte(Z80_MAILBOX_OFFSET + 3, b3);
+    z80_write_be_word(Z80_MAILBOX_OFFSET + 0, ((u16)b0 << 8) | b1);
+    z80_write_be_word(Z80_MAILBOX_OFFSET + 2, ((u16)b2 << 8) | b3);
 
     z80_bus_release();
 
@@ -239,29 +288,63 @@ static void play_wave(u16 wave_index, u8 owner_key)
                              (u8)packed_sound_id);
 }
 
+static void start_playback(void)
+{
+    if (!initialized || verify_errors)
+    {
+        return;
+    }
+
+    if (selected_wave < 1)
+    {
+        selected_wave = 1;
+    }
+    if (selected_wave > DEFAULT_WAVE_COUNT)
+    {
+        selected_wave = DEFAULT_WAVE_COUNT;
+    }
+    if (repeat_count < 1)
+    {
+        repeat_count = 1;
+    }
+
+    commands_sent = 0;
+    plays_sent = 0;
+    playing = 1;
+    done = 0;
+    last_play_frame = 0;
+    next_play_frame = frame_count;
+    phase = 6;
+    publish_status();
+}
+
 static void draw_status(void)
 {
-    text_reset();
-    IGS023_FG_X_SET(8);
-    IGS023_FG_Y_SET(8);
-
     text_color(1);
     text_cursor(2, 2);
     text("Z80 SOUND TEST\n");
     textf("INIT   : %04X\n", initialized);
     textf("VERIFY : %04X\n", verify_errors);
-    textf("CMD    : %04X\n", commands_sent);
-    textf("WAVE   : %04X/%04X\n", selected_wave, (u16)DEFAULT_WAVE_COUNT);
+    textf("CMD    : %04X/%04X\n", commands_sent, repeat_count);
+    textf("FRAME  : %08X\n", frame_count);
     textf("PHASE  : %04X\n", phase);
     textf("L1/L2  : %04X %04X\n", Z80_LATCH1, Z80_LATCH2);
     textf("L3     : %04X\n", Z80_LATCH3);
-    text("\nBTN1 PLAY  BTN2 NEXT\n");
-    text("BTN3 REINIT\n");
 
     if (verify_errors)
     {
         text_color(2);
         text("Z80 RAM VERIFY FAILED\n");
+    }
+    else if (done)
+    {
+        text_color(1);
+        text("DONE\n");
+    }
+    else if (playing)
+    {
+        text_color(3);
+        text("PLAYING\n");
     }
     else if (initialized)
     {
@@ -273,6 +356,16 @@ static void draw_status(void)
         text_color(3);
         text("INITIALIZING\n");
     }
+
+    gui_begin(2, 14);
+    gui_u16("WAVE", &selected_wave);
+    gui_u16("REPEAT", &repeat_count);
+    gui_u16("DELAY", &repeat_delay_frames);
+    if (gui_button("START"))
+    {
+        start_playback();
+    }
+    gui_end();
 }
 
 static void init(void)
@@ -289,15 +382,21 @@ static void init(void)
     initialized = 0;
     verify_errors = 0;
     commands_sent = 0;
-    selected_wave = 1;
+    selected_wave = DEFAULT_WAVE_INDEX;
+    repeat_count = DEFAULT_REPEAT_COUNT;
+    repeat_delay_frames = DEFAULT_REPEAT_DELAY_FRAMES;
     phase = 0;
+    playing = 0;
+    done = 0;
     frame_count = 0;
+    last_play_frame = 0;
+    next_play_frame = 0;
+    plays_sent = 0;
     sequence_mod64 = 0;
     latch_low_shadow = 0;
     latch3_high_shadow = 0;
 
     publish_status();
-    draw_status();
     z80_init_sound_driver();
 }
 
@@ -307,26 +406,21 @@ static void update(void)
     input_update();
     frame_count++;
 
-    if (initialized && !verify_errors)
+    if (initialized && !verify_errors && playing)
     {
-        if (frame_count == AUTO_PLAY_FRAMES || input_pressed(BTN1))
+        if (plays_sent < repeat_count && frame_count >= next_play_frame)
         {
             play_wave(selected_wave, 0x40);
+            plays_sent++;
+            last_play_frame = frame_count;
+            next_play_frame = frame_count + repeat_delay_frames;
         }
-
-        if (input_pressed(BTN2))
+        else if (plays_sent >= repeat_count)
         {
-            selected_wave++;
-            if (selected_wave > DEFAULT_WAVE_COUNT)
-            {
-                selected_wave = 1;
-            }
+            playing = 0;
+            done = 1;
+            phase = 7;
         }
-    }
-
-    if (input_pressed(BTN3))
-    {
-        z80_init_sound_driver();
     }
 
     publish_status();

@@ -22,8 +22,8 @@ package ics2115_pkg;
     //            [3] loop | [2] 8-bit | [1] stop | [0] µ-law
     // =========================================================================
     localparam OSC_ULAW      = 0;
-    localparam OSC_STOP      = 1;
-    localparam OSC_EIGHTBIT  = 2;
+    localparam OSC_EIGHTBIT  = 1;
+    localparam OSC_STOP      = 2;
     localparam OSC_LOOP      = 3;
     localparam OSC_BIDIR     = 4;
     localparam OSC_IRQ       = 5;
