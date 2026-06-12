@@ -222,6 +222,7 @@ logic ss_irq;
 logic ss_override;
 logic ss_cpu_execute;
 logic ss_reset;
+logic ss_restore_active;
 wire ss_paused = ss_pause & paused;
 
 assign ss_state_out = ss_state;
@@ -232,6 +233,7 @@ always_comb begin
     ss_override = 0;
     ss_irq = 0;
     ss_reset = 0;
+    ss_restore_active = 0;
 
     case(ss_state)
         SST_IDLE: begin
@@ -261,9 +263,11 @@ always_comb begin
         end
 
         SST_RESTORE_WAIT_PAUSE: begin
+            ss_restore_active = 1;
         end
 
         SST_RESTORE_WAIT_READ: begin
+            ss_restore_active = 1;
         end
 
         SST_RESTORE_HOLD_RESET: begin
@@ -793,7 +797,8 @@ wire [15:0] igs026_x_aram_dout;
 
 wire igs026_x_aram_uds_n, igs026_x_aram_lds_n;
 
-wire z80_reset_n, z80_wait_n, z80_busrq_n, z80_busak_n, z80_int_n, z80_nmi_n;
+wire z80_reset_n /* verilator public_flat */;
+wire z80_wait_n, z80_busrq_n, z80_busak_n, z80_int_n, z80_nmi_n;
 wire z80_mreq_n, z80_iorq_n, z80_rd_n, z80_wr_n;
 wire [15:0] z80_addr;
 wire [7:0] z80_din;
@@ -802,7 +807,8 @@ wire [7:0] z80_dout;
 wire [1:0] ics2115_addr;
 wire [7:0] ics2115_din, ics2115_dout;
 wire ics2115_cs_n, ics2115_rd_n, ics2115_wr_n;
-wire ics2115_irq, ics2115_ready;
+wire ics2115_irq /* verilator public_flat */;
+wire ics2115_ready;
 wire ics2115_reset_n /* verilator public_flat */;
 
 wire [22:0] ics2115_rom_addr /* verilator public_flat */;
@@ -1234,7 +1240,8 @@ tv80s z80(
 
     .clk(clk),
     .cen(ce_8m & clocks_enabled),
-    .reset_n(z80_reset_n),
+    // Keep the Z80 out of reset while a savestate restore is in flight
+    .reset_n(z80_reset_n | ss_restore_active),
     .wait_n(z80_wait_n),
     .int_n(z80_int_n),
     .nmi_n(z80_nmi_n),
