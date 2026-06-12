@@ -513,9 +513,14 @@ module ics2115_osc
                     logic signed [26:0] vol_left;
                     logic [25:0] next_vol;
 
-                    // Skip envelope if done, stopped, or the selected VMode/VIncr
-                    // combination produces no measured accumulator movement.
-                    if (!(v.vol_ctrl[VOL_DONE] || v.vol_ctrl[VOL_STOP] || (vol_step == 26'd0))) begin
+                    // Skip envelope only when done or stopped.  A zero step
+                    // (VIncr/VMode with no movement) must STILL evaluate the
+                    // boundary: the BIOS voice teardown collapses the window
+                    // (VolStart=VolEnd=1) and polls VCtl until DONE sets —
+                    // hardware completes that instantly even with vincr=0.
+                    // With step 0 inside a valid window, vol_left >= 0 and
+                    // nothing changes (static volume stays safe).
+                    if (!(v.vol_ctrl[VOL_DONE] || v.vol_ctrl[VOL_STOP])) begin
                         // Update accumulator by the per-voice VMode/VIncr step.
                         if (v.vol_ctrl[VOL_INVERT]) begin
                             next_vol = v.vol_acc - vol_step;
@@ -530,6 +535,13 @@ module ics2115_osc
                             v.vol_acc <= next_vol;
                         end else begin
                             // Boundary crossed or exactly reached
+
+                            // The engine clears the rollover flag at the
+                            // boundary: the BIOS voice-teardown collapses the
+                            // ramp (VolStart=VolEnd) and polls VCtl bit2
+                            // until clear — with a stored-byte readback this
+                            // is the only thing that terminates that poll.
+                            v.vol_ctrl[VOL_ROLLOVER] <= 1'b0;
 
                             // Fire IRQ if enabled
                             if (v.vol_ctrl[VOL_IRQ]) begin
