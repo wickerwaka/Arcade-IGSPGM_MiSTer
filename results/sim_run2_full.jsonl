@@ -1,0 +1,103 @@
+{"_meta": {"target": "sim", "groups": ["t_rb", "t_probe", "t_tmr", "t_irq", "t_irqv"], "exclude": []}}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 0, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 127, "read16": 32512}, "params": {"reg": 0, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 42, "read16": 10752}, "params": {"reg": 0, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 0, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 1, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65534, "read16": 65534}, "params": {"reg": 1, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43604, "read16": 43604}, "params": {"reg": 1, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23204, "read16": 23204}, "params": {"reg": 1, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 2, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65535, "read16": 65535}, "params": {"reg": 2, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43605, "read16": 43605}, "params": {"reg": 2, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23205, "read16": 23205}, "params": {"reg": 2, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 3, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 3, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 3, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 3, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 4, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65535, "read16": 65535}, "params": {"reg": 4, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43605, "read16": 43605}, "params": {"reg": 4, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23205, "read16": 23205}, "params": {"reg": 4, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 5, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 5, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 5, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 5, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 6, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 6, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 6, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 6, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 7, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 7, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 7, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 7, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 8, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 8, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 8, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 8, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 9, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65535, "read16": 65535}, "params": {"reg": 9, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43605, "read16": 43605}, "params": {"reg": 9, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23205, "read16": 23205}, "params": {"reg": 9, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 10, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65535, "read16": 65535}, "params": {"reg": 10, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43605, "read16": 43605}, "params": {"reg": 10, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23205, "read16": 23205}, "params": {"reg": 10, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 11, "voice": 2, "width": "w16", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 65528, "read16": 65528}, "params": {"reg": 11, "voice": 2, "width": "w16", "wrote": 65535}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 43600, "read16": 43600}, "params": {"reg": 11, "voice": 2, "width": "w16", "wrote": 43605}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 23200, "read16": 23200}, "params": {"reg": 11, "voice": 2, "width": "w16", "wrote": 23205}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 1, "read16": 256}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 129, "read16": 33024}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 129, "read16": 33024}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 1, "read16": 256}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 252, "read16": 64512}, "params": {"reg": 16, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 16, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 254, "read16": 65024}, "params": {"reg": 16, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 253, "read16": 64768}, "params": {"reg": 16, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 17, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 17, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 17, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 17, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 0, "read16": 0}, "params": {"reg": 18, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65280}, "params": {"reg": 18, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 170, "read16": 43520}, "params": {"reg": 18, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 85, "read16": 21760}, "params": {"reg": 18, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
+{"obs": {"reads": [1, 9, 17, 25, 33, 41, 49, 57, 65, 73, 81, 89, 97, 105, 113, 121, 129, 137, 145, 153, 161, 169, 177, 185, 193, 201, 209, 217, 225, 233, 241, 249]}, "params": {"reg": 12}, "test_id": "t_rb.select_isolation"}
+{"obs": {"read_other_voice": 0, "read_voice0": 90}, "params": {"wrote": 90, "wrote_voice": 0}, "test_id": "t_rb.vmode_scope"}
+{"obs": {"read16": 4694}, "params": {"byte_value": 86, "byte_width": "lo8", "reg": 1, "setup": 4660, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read16": 30772}, "params": {"byte_value": 120, "byte_width": "hi8", "reg": 1, "setup": 4660, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read16": 17306}, "params": {"byte_value": 154, "byte_width": "lo8", "reg": 9, "setup": 17185, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read16": 48161}, "params": {"byte_value": 188, "byte_width": "hi8", "reg": 9, "setup": 17185, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read16": 9438}, "params": {"byte_value": 222, "byte_width": "lo8", "reg": 10, "setup": 9320, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read16": 61544}, "params": {"byte_value": 240, "byte_width": "hi8", "reg": 10, "setup": 9320, "voice": 2}, "test_id": "t_rb.width_disturb"}
+{"obs": {"read": 0, "read16": 31}, "params": {"wrote": 31}, "test_id": "t_rb.active_osc"}
+{"obs": {"read": 0, "read16": 21}, "params": {"wrote": 21}, "test_id": "t_rb.active_osc"}
+{"obs": {"read": 0, "read16": 31}, "params": {"wrote": 255}, "test_id": "t_rb.active_osc"}
+{"obs": {"hi8": 255, "w16": 65280}, "params": {}, "test_id": "t_rb.irqv_idle"}
+{"obs": {"read": 0}, "params": {"reg": 64, "wrote": 0}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 127}, "params": {"reg": 64, "wrote": 127}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 255}, "params": {"reg": 64, "wrote": 255}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 0}, "params": {"reg": 65, "wrote": 0}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 127}, "params": {"reg": 65, "wrote": 127}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 255}, "params": {"reg": 65, "wrote": 255}, "test_id": "t_rb.timer_preset"}
+{"obs": {"read": 0}, "params": {"reg": 66, "wrote": 0}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"reg": 66, "wrote": 90}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"reg": 66, "wrote": 255}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"reg": 67, "wrote": 0}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"reg": 67, "wrote": 90}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"reg": 67, "wrote": 255}, "test_id": "t_rb.timer_scale"}
+{"obs": {"read": 0}, "params": {"wrote": 0}, "test_id": "t_rb.irq_enable"}
+{"obs": {"read": 0}, "params": {"wrote": 3}, "test_id": "t_rb.irq_enable"}
+{"obs": {"read": 0}, "params": {"wrote": 255}, "test_id": "t_rb.irq_enable"}
+{"obs": {"reads": [128, 128, 128]}, "params": {}, "test_id": "t_rb.osc_vector_idle"}
+{"obs": {"after_w3": 1, "after_wa5": 1, "initial": 1}, "params": {}, "test_id": "t_rb.revision"}
+{"obs": {"initial": 0, "reads": {"0x00": 0, "0x01": 0, "0x02": 0, "0x04": 0, "0x08": 0, "0x0c": 0, "0x10": 0, "0x20": 0, "0x40": 0, "0x80": 0, "0xff": 0}}, "params": {}, "test_id": "t_rb.system_control"}
+{"obs": {"reads": {"0x00": 0, "0x07": 0, "0x1f": 0}}, "params": {}, "test_id": "t_rb.osc_select_read"}
+{"obs": {"global_aliased": null, "irq_count_delta": 0, "reads": {"hi8": 0, "lo8": 0, "w16": 0}, "voice_aliased": null, "write_readback": {"0xa5c3": 0, "0xffff": 0}}, "params": {"reg": 19}, "test_id": "t_probe.voice_reserved"}
+{"obs": {"global_aliased": null, "irq_count_delta": 0, "reads": {"hi8": 0, "lo8": 0, "w16": 0}, "voice_aliased": null, "write_readback": {"0xa5c3": 0, "0xffff": 0}}, "params": {"reg": 20}, "test_id": "t_probe.voice_reserved"}
+{"obs": {"global_aliased": null, "irq_count_delta": 0, "reads": {"hi8": 0, "lo8": 0, "w16": 0}, "voice_aliased": null, "write_readback": {"0xa5c3": 0, "0xffff": 0}}, "params": {"reg": 21}, "test_id": "t_probe.voice_reserved"}

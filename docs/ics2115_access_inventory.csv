@@ -1,0 +1,62 @@
+source,file,line,function,reg,width,rw,value,notes
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,846,InitializeSoundChannels@ram:1050,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: voice_slot
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,847,InitializeSoundChannels@ram:1050,0x0d,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,852,InitializeSoundChannels@ram:1050,0x0d,UPPER8,W,DYNAMIC,value expr: bVar2
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,853,InitializeSoundChannels@ram:1050,0x07,UPPER8,W,0x01,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,854,InitializeSoundChannels@ram:1050,0x08,UPPER8,W,0x01,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,855,InitializeSoundChannels@ram:1050,0x10,UPPER8,W,0x0f,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,857,InitializeSoundChannels@ram:1050,0x0d,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,860,InitializeSoundChannels@ram:1050,0x0d,UPPER8,W,0x03,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,861,InitializeSoundChannels@ram:1050,0x00,UPPER8,W,0x00,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,920,ProgramSoundChannelRegisters@ram:10b9,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: puVar3[-6]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,924,ProgramSoundChannelRegisters@ram:10b9,0x01,WORD,W,DYNAMIC,value expr: value
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,926,ProgramSoundChannelRegisters@ram:10b9,0x11,UPPER8,W,DYNAMIC,value expr: **(byte **)(puVar3 + -4)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,929,ProgramSoundChannelRegisters@ram:10b9,0x0b,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 4)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,931,ProgramSoundChannelRegisters@ram:10b9,0x0a,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 6)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,935,ProgramSoundChannelRegisters@ram:10b9,0x0b,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 8)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,937,ProgramSoundChannelRegisters@ram:10b9,0x0a,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 10)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,940,ProgramSoundChannelRegisters@ram:10b9,0x03,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 4)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,942,ProgramSoundChannelRegisters@ram:10b9,0x02,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 6)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,944,ProgramSoundChannelRegisters@ram:10b9,0x05,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 8)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,946,ProgramSoundChannelRegisters@ram:10b9,0x04,WORD,W,DYNAMIC,value expr: *(ushort *)(*(short *)(puVar3 + -4) + 10)
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,948,ProgramSoundChannelRegisters@ram:10b9,0x0c,UPPER8,W,DYNAMIC,value expr: z80_voice_pan_table[(byte)puVar3[8]]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,950,ProgramSoundChannelRegisters@ram:10b9,0x09,WORD,W,DYNAMIC,value expr: z80_wave_frequency_table[(byte)puVar3[6]]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,952,ProgramSoundChannelRegisters@ram:10b9,0x00,UPPER8,W,DYNAMIC,value expr: puVar3[-2]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,954,ProgramSoundChannelRegisters@ram:10b9,0x0d,UPPER8,W,0x03,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,956,ProgramSoundChannelRegisters@ram:10b9,0x10,UPPER8,W,0x00,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1020,ProgramSoundChannelMinimal@ram:1208,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: puVar4[-4]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1024,ProgramSoundChannelMinimal@ram:1208,0x01,WORD,W,DYNAMIC,value expr: value
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1043,SetSoundChannelWaveIndex@ram:126e,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: voice_slot
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1044,SetSoundChannelWaveIndex@ram:126e,0x09,WORD,W,DYNAMIC,value expr: z80_wave_frequency_table[(byte)puVar1[-2]]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1065,ConfigureSoundChipVoiceMode@ram:12bb,0x43,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1069,ConfigureSoundChipVoiceMode@ram:12bb,0x40,LOWER8,W,DYNAMIC,value expr: puVar3[-4]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1070,ConfigureSoundChipVoiceMode@ram:12bb,0x42,LOWER8,W,DYNAMIC,value expr: puVar3[-2]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1074,ConfigureSoundChipVoiceMode@ram:12bb,0x41,LOWER8,W,DYNAMIC,value expr: puVar3[-4]
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1081,ConfigureSoundChipVoiceMode@ram:12bb,0x43,LOWER8,W,DYNAMIC,value expr: bVar2
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1243,HandleIrqBit0Service@ram:1519,0x43,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1245,HandleIrqBit0Service@ram:1519,0x41,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1250,HandleIrqBit0Service@ram:1519,0x40,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1281,HandleIrqBit1Service@ram:153b,0x0f,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1292,HandleIrqBit1Service@ram:153b,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: z80_irq_voice_index
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1307,HandleIrqBit1Service@ram:153b,0x0d,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1330,HandleIrqBit1Service@ram:153b,0x00,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1399,InitializeSoundChipCore@ram:16a0,0x4c,LOWER8,W,0x03,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1401,InitializeSoundChipCore@ram:16a0,0x4d,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1403,InitializeSoundChipCore@ram:16a0,0x4d,LOWER8,W,DYNAMIC,value expr: bVar1 | 0xc
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1405,InitializeSoundChipCore@ram:16a0,0x4a,LOWER8,W,0x01,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1481,ResetSoundChipMixerState@ram:173b,0x4d,LOWER8,W,0x00,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1483,ResetSoundChipMixerState@ram:173b,0x4d,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1485,ResetSoundChipMixerState@ram:173b,0x4d,LOWER8,W,0x01,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1543,InitializeSoundChipVoicesAndTables@ram:17a6,0x4d,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1549,InitializeSoundChipVoicesAndTables@ram:17a6,0x4d,LOWER8,W,DYNAMIC,value expr: bVar4 & 0xf7
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1551,InitializeSoundChipVoicesAndTables@ram:17a6,0x0e,UPPER8,W,0x1f,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1566,InitializeSoundChipVoicesAndTables@ram:17a6,0x4f,LOWER8,W,DYNAMIC,WriteICSSelectOscillator; value expr: (byte)uStack_6
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1579,InitializeSoundChipVoicesAndTables@ram:17a6,0x00,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1586,InitializeSoundChipVoicesAndTables@ram:17a6,0x0f,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1590,InitializeSoundChipVoicesAndTables@ram:17a6,0x4f,LOWER8,W,0x00,WriteICSSelectOscillator
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1605,InitializeSoundChipVoicesAndTables@ram:17a6,0x00,UPPER8,W,0xa0,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1607,InitializeSoundChipVoicesAndTables@ram:17a6,0x4b,LOWER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1614,InitializeSoundChipVoicesAndTables@ram:17a6,0x0e,UPPER8,W,0x1f,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1616,InitializeSoundChipVoicesAndTables@ram:17a6,0x00,UPPER8,W,0x00,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1618,InitializeSoundChipVoicesAndTables@ram:17a6,0x0f,UPPER8,R,,
+pgm_bios_z80,pgm_bios_z80_raw_decompiled.c,1621,InitializeSoundChipVoicesAndTables@ram:17a6,0x4d,LOWER8,W,DYNAMIC,value expr: (byte)(uStack_6 >> 8)

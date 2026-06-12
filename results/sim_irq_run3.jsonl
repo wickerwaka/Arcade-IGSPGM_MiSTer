@@ -1,0 +1,21 @@
+{"_meta": {"target": "sim", "groups": ["t_tmr", "t_irq", "t_irqv"], "exclude": []}}
+{"obs": {"count": 32, "frames": 30, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 30, "preset": 255, "scale": 224, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 5, "frames": 40, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 40, "preset": 255, "scale": 231, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 35, "frames": 20, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 20, "preset": 4, "scale": 255, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 2, "frames": 60, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 60, "preset": 255, "scale": 255, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 87, "frames": 20, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 20, "preset": 255, "scale": 31, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 43, "frames": 20, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 20, "preset": 255, "scale": 63, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 140, "frames": 20, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 20, "preset": 255, "scale": 68, "timer": 0}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 35, "frames": 20, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 20, "preset": 4, "scale": 255, "timer": 1}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 32, "frames": 30, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 30, "preset": 255, "scale": 224, "timer": 1}, "test_id": "t_tmr.rate"}
+{"obs": {"count": 0, "frames": 15, "other_timer_count": 0, "spurious": 0}, "params": {"frames_min": 15, "preset": 0, "scale": 255, "timer": 0}, "test_id": "t_tmr.preset_zero"}
+{"obs": {"pended": true, "read4a_while_pending": 1, "stat43": 1, "z80_spurious": 0, "z80_timer0_irqs": 0}, "params": {}, "test_id": "t_irq.pending_while_disabled"}
+{"obs": {"delivered_after_enable": true, "stat43_after": 0}, "params": {}, "test_id": "t_irq.latched_delivery"}
+{"obs": {"pended": true, "stat43_after_read40": 0}, "params": {"width": "lo8"}, "test_id": "t_irq.ack_width"}
+{"obs": {"pended": true, "stat43_after_read40": 0}, "params": {"width": "hi8"}, "test_id": "t_irq.ack_width"}
+{"obs": {"pended": true, "stat43_after_read40": 0}, "params": {"width": "w16"}, "test_id": "t_irq.ack_width"}
+{"obs": {"first": 1, "pended": true, "second": 1}, "params": {}, "test_id": "t_irq.stat43_sticky"}
+{"obs": {"conf_after_irqv_reads": 0, "conf_readback": 128, "irqv_first": 103, "irqv_second": 255, "vec_4b": [128, 128], "z80_osc_irqs": 0}, "params": {"voice": 7}, "test_id": "t_irqv.pend_silent"}
+{"obs": {"irqv_sequence": [99, 105, 113, 255], "vec_4b_sequence": [128, 128, 128, 128]}, "params": {"voices_pend_order": [9, 3, 17]}, "test_id": "t_irqv.multi_pend_order"}
+{"obs": {"irqv_after_drain": 255, "irqv_after_ungate": 113, "irqv_while_gated": 255}, "params": {"active_osc_gate": 10, "voice": 17}, "test_id": "t_irqv.active_osc_gating"}
+{"obs": {"conf_after": 32, "irqv_after": 255, "log": [["irqv", 101, 130]], "z80_osc_irqs": 1, "z80_spurious": 0, "z80_vol_irqs": 0}, "params": {"voice": 5}, "test_id": "t_irqv.pend_enabled"}

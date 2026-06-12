@@ -578,6 +578,45 @@ Result:
 {}
 ```
 
+### `nvram.save`
+
+Reads the battery-backed 68000 work RAM (128 KiB) out of the core through the
+ioctl upload path and writes it to `filename`. The file is always 131072 bytes,
+in 68000 byte order (byte 0 = D15:8 of word 0), matching the `.nvm` blob the
+MiSTer HPS saves for the MRA `<nvram index="8">` section. The core keeps
+running while the snapshot is taken.
+
+Request:
+
+```json
+{"id":18,"method":"nvram.save","params":{"filename":"nvram/test.nvm"}}
+```
+
+Result:
+
+```json
+{}
+```
+
+### `nvram.load`
+
+Sends an nvram file (at most 131072 bytes) into the work RAM through the ioctl
+download path at index 8. Reset is held during the download and released
+afterwards, so the system reboots with the loaded battery-backed RAM, like a
+power-on on real hardware.
+
+Request:
+
+```json
+{"id":19,"method":"nvram.load","params":{"filename":"nvram/test.nvm"}}
+```
+
+Result:
+
+```json
+{}
+```
+
 ## Trace and video
 
 ### `trace.start`

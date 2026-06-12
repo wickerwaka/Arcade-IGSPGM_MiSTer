@@ -1,0 +1,6 @@
+{"_meta": {"target": "hw", "groups": ["t_voice"], "exclude": []}}
+{"obs": {"conf_after": 0, "irqv_after": 228, "log": [["irqv", 100, 130], ["irqv", 100, 130]], "vec_4b_after": 4, "z80_osc_irqs": 2, "z80_spurious": 0, "z80_vol_irqs": 0}, "params": {"conf": 32, "voice": 4}, "test_id": "t_voice.oneshot_end_irq"}
+{"obs": {"conf_after": 160, "z80_osc_irqs": 0}, "params": {"conf": 32, "irq_4a": 0, "voice": 4}, "test_id": "t_voice.oneshot_gated"}
+{"obs": {"conf_after": 0, "irqv": 228, "vec_4b": 4, "z80_osc_irqs": 0}, "params": {"conf": 0, "voice": 4}, "test_id": "t_voice.oneshot_no_enable"}
+{"obs": {"conf_after": 8, "z80_osc_irqs": 1}, "params": {"conf": 40, "frames": 150, "voice": 4}, "test_id": "t_voice.loop_end_irqs"}
+{"obs": {"irqv_after": 228, "log": [], "vctl_after": 32, "z80_osc_irqs": 0, "z80_vol_irqs": 0}, "params": {"voice": 4, "vol_ctrl": 32, "vol_incr": 16}, "test_id": "t_voice.vol_ramp_end_irq"}
