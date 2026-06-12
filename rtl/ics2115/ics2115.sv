@@ -1162,9 +1162,15 @@ module ics2115
             // RAM copy via the irqv_ram_clear path).
             if (seq_voice_wr) begin
                 osc_irq_en[seq_wr_idx] <= seq_wr_data.osc_conf[OSC_IRQ];
-                osc_irq_pending[seq_wr_idx] <= osc_irq_pending[seq_wr_idx] | seq_wr_data.osc_conf[OSC_IRQ_PEND];
+                // Set pends from the engine's EVENT PULSES, not the RAM bit7
+                // echo: a write-back of stale stored bit7 racing an IRQV
+                // consume would re-assert the INT forever (voice retrigger
+                // loop — stuck repeating notes in game music).
+                if (osc_irq_osc)
+                    osc_irq_pending[seq_wr_idx] <= 1'b1;
                 vol_irq_en[seq_wr_idx] <= seq_wr_data.vol_ctrl[VOL_IRQ];
-                vol_irq_pending[seq_wr_idx] <= vol_irq_pending[seq_wr_idx] | seq_wr_data.vol_ctrl[VOL_IRQ_PEND];
+                if (osc_irq_vol)
+                    vol_irq_pending[seq_wr_idx] <= 1'b1;
             end
 
             if (host_voice_wr_apply) begin
