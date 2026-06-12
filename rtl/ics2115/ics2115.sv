@@ -837,9 +837,10 @@ module ics2115
                 5'h0A: result.osc_acc[28:21]   = data[7:0];
                 5'h0B: result.osc_acc[12:5]    = data[7:0];
                 5'h0C: result.vol_pan          = data[7:0];
-                // VCtl bit7 (vol pend) is not host-settable; only real
-                // envelope events set it (via the engine write path).
-                5'h0D: result.vol_ctrl         = {1'b0, data[6:0]};
+                // VCtl stores all 8 bits (hardware echoes bit7) but a host
+                // write never latches a vol PEND — the sideband is set from
+                // engine event pulses only.
+                5'h0D: result.vol_ctrl         = data[7:0];
                 5'h10: begin
                     result.osc_ctl = data[7:0];
                 end
