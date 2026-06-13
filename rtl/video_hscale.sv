@@ -8,6 +8,19 @@
 // active-width delta so the image stays centered, and the user offset
 // moves it within hblank on top of that.
 //
+// The line buffer is small (128 px) and read concurrently with the write,
+// so the scaled readout starts partway into the line and SPILLS past the
+// line boundary into the next line by `blank_lc` clocks (16 at 100%, up
+// to 436 at 118.75%). That spill is the right edge of the line and is a
+// real part of the picture, so vblank/vsync are regenerated to flip at
+// the spill end (line_clk == blank_lc) rather than at the input's line
+// boundary. That keeps each active line as one continuous DE pulse with
+// the vblank edge landing exactly where the active region really ends -
+// which is what downstream DE-edge timing recovery (MiSTer's osd.v)
+// needs. Passing the input vblank straight through instead leaves a
+// 1-2 clock DE sliver at the top of the first vblank line that collapses
+// the OSD's recovered pixel clock and drops the overlay.
+//
 // Input line timing (50MHz clocks, 0 = hblank rising edge):
 //   total 3200, hblank 0..959, hsync 315..629, active 960..3199 (448 px)
 module video_hscale(
@@ -50,6 +63,7 @@ reg [11:0] active_len; // 28 * step = 448 * step / 16 output clocks
 reg [11:0] rd_start;   // line_clk where readout begins
 reg [11:0] hs_start;
 reg [11:0] hs_end;
+reg [11:0] blank_lc;   // line_clk in the next line where the active spill ends
 
 wire signed [5:0] k = {scale[4], scale};
 wire [5:0] abs_k = scale[4] ? -k[5:0] : k[5:0];
@@ -72,8 +86,18 @@ always_ff @(posedge clk) begin
         // offset in input pixels
         hs_start <= unsigned'(hs_pos);
         hs_end <= unsigned'(hs_pos + 12'sd315);
+        // rd_start + active_len - 3200: where the readout (and its spill
+        // into the next line) finishes. 16 for downscale/100%, up to 436.
+        blank_lc <= 12'(16 + (scale[4] ? 6'd0 : 28 * k[5:0]));
     end
 end
+
+// Output vblank/vsync are regenerated, not passed through: each line's
+// input vblank/vsync is captured at line_start, then applied at the point
+// where this scaled line's active readout actually ends (blank_lc into
+// the line). This aligns the vertical blanking edges with the spilled
+// active region so the DE waveform has one clean pulse per line.
+reg vbl_line, vsl_line;
 
 // Write side: store input pixels at ce_pix_in during active video
 reg [8:0] wr_idx;
@@ -88,7 +112,12 @@ reg [6:0] acc;
 reg reading_cur_line; // readout spills past the line wrap at high scales
 
 wire rd_active = |active_cnt;
-wire rd_load = line_clk == rd_start;
+// Don't start a readout on vblank lines: they carry no visible content,
+// and a vblank-line readout would spill garbage into the first active
+// line right where vb_out releases, leaving a short DE sliver. (A real
+// active line's spill into the first vblank line is fine - vb_out rises
+// over it.) vbl_line is latched at line_start, valid well before rd_start.
+wire rd_load = (line_clk == rd_start) & ~vbl_line;
 
 wire [23:0] rd_q;
 
@@ -111,7 +140,6 @@ dualport_ram_unreg #(.WIDTH(24), .WIDTHAD(7)) line_buf(
 // extra delay stage to keep the same alignment with the active region.
 reg rd_active_d1;
 reg hs_d1, hs_d2;
-reg vs_d1, vb_d1;
 
 reg debug_underrun /* verilator public_flat */;
 reg debug_overflow /* verilator public_flat */;
@@ -123,8 +151,17 @@ always_ff @(posedge clk) begin
         line_clk <= 0;
         wr_idx <= 0;
         reading_cur_line <= 0;
+        // Capture this line's vblank/vsync (valid at the line boundary)
+        vbl_line <= vb_in;
+        vsl_line <= vs_in;
     end else begin
         line_clk <= line_clk == 12'd3199 ? 12'd0 : line_clk + 12'd1;
+    end
+
+    // Flip the regenerated vertical blanking where the active spill ends
+    if (line_clk == blank_lc) begin
+        vb_out <= vbl_line;
+        vs_out <= vsl_line;
     end
 
     if (wr_en) begin
@@ -152,14 +189,10 @@ always_ff @(posedge clk) begin
     rd_active_d1 <= rd_active;
     hs_d1 <= line_clk >= hs_start && line_clk < hs_end;
     hs_d2 <= hs_d1;
-    vs_d1 <= vs_in;
-    vb_d1 <= vb_in;
 
     {r_out, g_out, b_out} <= rd_q;
     hb_out <= ~rd_active_d1;
     hs_out <= hs_d2;
-    vs_out <= vs_d1;
-    vb_out <= vb_d1;
 end
 
 endmodule
