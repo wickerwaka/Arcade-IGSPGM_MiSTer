@@ -77,10 +77,13 @@ jtframe_resync #(5) jtframe_resync
 );
 
 // Horizontal scaler for consumer CRT width correction. Outputs one pixel
-// per CLK_VIDEO cycle, so the scandoubler can't run on top of it (and the
-// H-Pos resync offset is superseded by its own offset control). Intended
-// for the analog 15kHz output; the HDMI scaler can't handle the resulting
-// line widths (up to 2660 pixels).
+// per CLK_VIDEO cycle and bypasses video_mixer entirely: the scandoubler
+// can't double a full-rate stream and gamma_corr only advances on ce_pix
+// rising edges (and needs 4 clocks per pixel), so neither can sit behind
+// it. Gamma is therefore not applied while the scaler is enabled. The
+// H-Pos resync offset is superseded by the scaler's own offset control.
+// Intended for the analog 15kHz output; the HDMI scaler can't handle the
+// resulting line widths (up to 2660 pixels).
 wire hsc_en_lat;
 wire [7:0] hsc_r, hsc_g, hsc_b;
 wire hsc_hs, hsc_hb, hsc_vs, hsc_vb;
@@ -110,37 +113,48 @@ video_hscale video_hscale(
     .vb_out(hsc_vb)
 );
 
-wire VGA_DE_MIXER;
+wire mixer_ce_pixel, mixer_de;
+wire [7:0] mixer_r, mixer_g, mixer_b;
+wire mixer_hs, mixer_vs;
+
+wire VGA_DE_MIXER = hsc_en_lat ? ~(hsc_hb | hsc_vb) : mixer_de;
 wire [2:0] sl = scandoubler_fx ? scandoubler_fx - 1'd1 : 3'd0;
 wire use_scandoubler = ~hsc_en_lat && (scandoubler_fx || forced_scandoubler);
 
 assign VGA_SL  = sl[1:0];
 
+assign CE_PIXEL = hsc_en_lat ? 1'b1   : mixer_ce_pixel;
+assign VGA_R    = hsc_en_lat ? hsc_r  : mixer_r;
+assign VGA_G    = hsc_en_lat ? hsc_g  : mixer_g;
+assign VGA_B    = hsc_en_lat ? hsc_b  : mixer_b;
+assign VGA_HS   = hsc_en_lat ? hsc_hs : mixer_hs;
+assign VGA_VS   = hsc_en_lat ? hsc_vs : mixer_vs;
+
 video_mixer #(.LINE_LENGTH(324), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 (
     .CLK_VIDEO(CLK_VIDEO),
-    .ce_pix(hsc_en_lat ? 1'b1 : core_ce_pix),
-    .CE_PIXEL(CE_PIXEL),
+    .ce_pix(core_ce_pix),
+    .CE_PIXEL(mixer_ce_pixel),
 
     .scandoubler(use_scandoubler),
     .hq2x(0), // TODO - disabled due to memory pressure
     .gamma_bus(gamma_bus),
 
-    .HBlank(hsc_en_lat ? hsc_hb : core_hb),
-    .VBlank(hsc_en_lat ? hsc_vb : core_vb),
-    .HSync(hsc_en_lat ? hsc_hs : resync_hs),
-    .VSync(hsc_en_lat ? hsc_vs : resync_vs),
+    .HBlank(core_hb),
+    .VBlank(core_vb),
+    .HSync(resync_hs),
+    .VSync(resync_vs),
 
-    .R(hsc_en_lat ? hsc_r : core_r),
-    .G(hsc_en_lat ? hsc_g : core_g),
-    .B(hsc_en_lat ? hsc_b : core_b),
+    .R(core_r),
+    .G(core_g),
+    .B(core_b),
 
-    .VGA_R(VGA_R),
-    .VGA_G(VGA_G),
-    .VGA_B(VGA_B),
-    .VGA_VS(VGA_VS),
-    .VGA_HS(VGA_HS),
-    .VGA_DE(VGA_DE_MIXER)
+    .VGA_R(mixer_r),
+    .VGA_G(mixer_g),
+    .VGA_B(mixer_b),
+    .VGA_VS(mixer_vs),
+    .VGA_HS(mixer_hs),
+    .VGA_DE(mixer_de)
 );
 
 video_freak video_freak(
