@@ -6,7 +6,6 @@ module video_path(
     input       [4:0] voffset,
     input             hscale_en,
     input       [4:0] hscale,
-    input       [4:0] hscale_offset,
     input             forced_scandoubler,
     input       [2:0] scandoubler_fx,
     input       [1:0] ar,
@@ -93,7 +92,7 @@ video_hscale video_hscale(
 
     .enable(hscale_en),
     .scale(hscale),
-    .offset(hscale_offset),
+    .offset(-hoffset),
     .en_lat(hsc_en_lat),
 
     .ce_pix_in(core_ce_pix),

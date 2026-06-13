@@ -1,26 +1,6 @@
 // Horizontal scaler for consumer CRT width correction.
 //
-// Re-emits each line at the full 50MHz clock (5x the native 10MHz pixel
-// rate) so the active width can be scaled in 1.25% steps (80%..118.75%)
-// without visible aliasing on analog output. Total line length (and thus
-// hsync rate) is unchanged; scaling the active region changes the hblank
-// size. Hsync is regenerated: its base position auto-shifts by half the
-// active-width delta so the image stays centered, and the user offset
-// moves it within hblank on top of that.
-//
-// The line buffer is small (128 px) and read concurrently with the write,
-// so the scaled readout starts partway into the line and SPILLS past the
-// line boundary into the next line by `blank_lc` clocks (16 at 100%, up
-// to 436 at 118.75%). That spill is the right edge of the line and is a
-// real part of the picture, so vblank/vsync are regenerated to flip at
-// the spill end (line_clk == blank_lc) rather than at the input's line
-// boundary. That keeps each active line as one continuous DE pulse with
-// the vblank edge landing exactly where the active region really ends -
-// which is what downstream DE-edge timing recovery (MiSTer's osd.v)
-// needs. Passing the input vblank straight through instead leaves a
-// 1-2 clock DE sliver at the top of the first vblank line that collapses
-// the OSD's recovered pixel clock and drops the overlay.
-//
+
 // Input line timing (50MHz clocks, 0 = hblank rising edge):
 //   total 3200, hblank 0..959, hsync 315..629, active 960..3199 (448 px)
 module video_hscale(
