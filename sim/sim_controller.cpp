@@ -513,6 +513,8 @@ ControllerResult<SignalListResult> SimController::ListSignals() const
     SignalListResult result;
     result.mSignals.push_back({"vblank", 1, "alias", "builtin"});
     result.mSignals.push_back({"hblank", 1, "alias", "builtin"});
+    result.mSignals.push_back({"vsync", 1, "alias", "builtin"});
+    result.mSignals.push_back({"hsync", 1, "alias", "builtin"});
     result.mSignals.push_back({"reset", 1, "alias", "builtin"});
     result.mSignals.push_back({"rom_load_busy", 1, "alias", "builtin"});
     result.mSignals.push_back({"ss_state_out", 32, "alias", "builtin"});
@@ -571,6 +573,35 @@ ControllerResult<EmptyResult> SimController::SetDipSwitches(uint8_t value)
 
     mDipSwitch = value;
     gSimCore.mTop->dipswitch = mDipSwitch;
+    return ControllerResult<EmptyResult>::Success({});
+}
+
+ControllerResult<EmptyResult> SimController::SetHScale(bool enabled, int scale, int offset)
+{
+    auto initResult = EnsureInitialized();
+    if (!initResult.ok)
+        return initResult;
+
+    if (scale < -16 || scale > 15)
+    {
+        return ControllerResult<EmptyResult>::Failure("invalid_scale", "scale must be -16..15");
+    }
+
+    if (offset < -16 || offset > 15)
+    {
+        return ControllerResult<EmptyResult>::Failure("invalid_offset", "offset must be -16..15");
+    }
+
+    gSimCore.mTop->hscale_en = enabled ? 1 : 0;
+    gSimCore.mTop->hscale = static_cast<uint8_t>(scale) & 0x1f;
+    gSimCore.mTop->hscale_offset = static_cast<uint8_t>(offset) & 0x1f;
+
+    // The scaler outputs one pixel per 50MHz clock; max active width is
+    // 28 * 95 = 2660 clocks vs 448 native pixels
+    int width = enabled ? 2688 : (mHeadless ? 448 : 450);
+    gSimCore.mVideo->Deinit();
+    gSimCore.mVideo->Init(width, 224, mHeadless ? nullptr : ImguiGetRenderer());
+
     return ControllerResult<EmptyResult>::Success({});
 }
 
@@ -1071,6 +1102,14 @@ ControllerResult<SignalReadResult> SimController::ReadSignalValueBuiltin(const s
     else if (signal == "hblank")
     {
         result.mValue = gSimCore.mTop->hblank;
+    }
+    else if (signal == "vsync")
+    {
+        result.mValue = gSimCore.mTop->vsync;
+    }
+    else if (signal == "hsync")
+    {
+        result.mValue = gSimCore.mTop->hsync;
     }
     else if (signal == "reset")
     {

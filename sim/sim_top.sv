@@ -66,6 +66,10 @@ module sim_top(
 
     input             sync_fix,
 
+    input             hscale_en,
+    input       [4:0] hscale,
+    input       [4:0] hscale_offset,
+
     input             pause
 );
 
@@ -184,20 +188,61 @@ end
 wire nvram_dl = ioctl_download && (ioctl_index == 8'd8);
 wire nvram_wr = nvram_dl && ioctl_wr && ~|ioctl_addr[26:17];
 
+wire core_ce_pixel, core_hsync, core_hblank, core_vsync, core_vblank;
+wire [7:0] core_red, core_green, core_blue;
+
+wire hsc_en_lat;
+wire [7:0] hsc_r, hsc_g, hsc_b;
+wire hsc_hs, hsc_hb, hsc_vs, hsc_vb;
+
+video_hscale video_hscale(
+    .clk(clk),
+
+    .enable(hscale_en),
+    .scale(hscale),
+    .offset(hscale_offset),
+    .en_lat(hsc_en_lat),
+
+    .ce_pix_in(core_ce_pixel),
+    .r_in(core_red),
+    .g_in(core_green),
+    .b_in(core_blue),
+    .hb_in(core_hblank),
+    .vb_in(core_vblank),
+    .vs_in(core_vsync),
+
+    .r_out(hsc_r),
+    .g_out(hsc_g),
+    .b_out(hsc_b),
+    .hs_out(hsc_hs),
+    .hb_out(hsc_hb),
+    .vs_out(hsc_vs),
+    .vb_out(hsc_vb)
+);
+
+assign ce_pixel = hsc_en_lat ? 1'b1   : core_ce_pixel;
+assign hsync    = hsc_en_lat ? hsc_hs : core_hsync;
+assign hblank   = hsc_en_lat ? hsc_hb : core_hblank;
+assign vsync    = hsc_en_lat ? hsc_vs : core_vsync;
+assign vblank   = hsc_en_lat ? hsc_vb : core_vblank;
+assign red      = hsc_en_lat ? hsc_r  : core_red;
+assign green    = hsc_en_lat ? hsc_g  : core_green;
+assign blue     = hsc_en_lat ? hsc_b  : core_blue;
+
 // Instantiate the PGM module
 PGM pgm_inst(
     .clk_50m(clk),
     .reset(reset | rom_load_busy),
     .game(board_cfg.game),
-    
-    .ce_pixel(ce_pixel),
-    .hsync(hsync),
-    .hblank(hblank),
-    .vsync(vsync),
-    .vblank(vblank),
-    .red(red),
-    .green(green),
-    .blue(blue),
+
+    .ce_pixel(core_ce_pixel),
+    .hsync(core_hsync),
+    .hblank(core_hblank),
+    .vsync(core_vsync),
+    .vblank(core_vblank),
+    .red(core_red),
+    .green(core_green),
+    .blue(core_blue),
     
     .joystick_p1(joystick_p1),
     .joystick_p2(joystick_p2),

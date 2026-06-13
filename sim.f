@@ -13,6 +13,7 @@ rtl/address_translator.sv
 rtl/rom_cache.sv
 rtl/PGM.sv
 rtl/video_timing.sv
+rtl/video_hscale.sv
 rtl/ram.sv
 rtl/jtframe_frac_cen.v
 rtl/memory_stream.sv

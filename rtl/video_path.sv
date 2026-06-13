@@ -4,6 +4,9 @@ module video_path(
     // Configuration inputs
     input       [4:0] hoffset,
     input       [4:0] voffset,
+    input             hscale_en,
+    input       [4:0] hscale,
+    input       [4:0] hscale_offset,
     input             forced_scandoubler,
     input       [2:0] scandoubler_fx,
     input       [1:0] ar,
@@ -73,30 +76,64 @@ jtframe_resync #(5) jtframe_resync
     .vs_out(resync_vs)
 );
 
+// Horizontal scaler for consumer CRT width correction. Outputs one pixel
+// per CLK_VIDEO cycle, so the scandoubler can't run on top of it (and the
+// H-Pos resync offset is superseded by its own offset control). Intended
+// for the analog 15kHz output; the HDMI scaler can't handle the resulting
+// line widths (up to 2660 pixels).
+wire hsc_en_lat;
+wire [7:0] hsc_r, hsc_g, hsc_b;
+wire hsc_hs, hsc_hb, hsc_vs, hsc_vb;
+
+video_hscale video_hscale(
+    .clk(CLK_VIDEO),
+
+    .enable(hscale_en),
+    .scale(hscale),
+    .offset(hscale_offset),
+    .en_lat(hsc_en_lat),
+
+    .ce_pix_in(core_ce_pix),
+    .r_in(core_r),
+    .g_in(core_g),
+    .b_in(core_b),
+    .hb_in(core_hb),
+    .vb_in(core_vb),
+    .vs_in(resync_vs),
+
+    .r_out(hsc_r),
+    .g_out(hsc_g),
+    .b_out(hsc_b),
+    .hs_out(hsc_hs),
+    .hb_out(hsc_hb),
+    .vs_out(hsc_vs),
+    .vb_out(hsc_vb)
+);
+
 wire VGA_DE_MIXER;
 wire [2:0] sl = scandoubler_fx ? scandoubler_fx - 1'd1 : 3'd0;
-wire use_scandoubler = scandoubler_fx || forced_scandoubler;
+wire use_scandoubler = ~hsc_en_lat && (scandoubler_fx || forced_scandoubler);
 
 assign VGA_SL  = sl[1:0];
 
 video_mixer #(.LINE_LENGTH(324), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 (
     .CLK_VIDEO(CLK_VIDEO),
-    .ce_pix(core_ce_pix),
+    .ce_pix(hsc_en_lat ? 1'b1 : core_ce_pix),
     .CE_PIXEL(CE_PIXEL),
 
     .scandoubler(use_scandoubler),
     .hq2x(0), // TODO - disabled due to memory pressure
     .gamma_bus(gamma_bus),
 
-    .HBlank(core_hb),
-    .VBlank(core_vb),
-    .HSync(resync_hs),
-    .VSync(resync_vs),
+    .HBlank(hsc_en_lat ? hsc_hb : core_hb),
+    .VBlank(hsc_en_lat ? hsc_vb : core_vb),
+    .HSync(hsc_en_lat ? hsc_hs : resync_hs),
+    .VSync(hsc_en_lat ? hsc_vs : resync_vs),
 
-    .R(core_r),
-    .G(core_g),
-    .B(core_b),
+    .R(hsc_en_lat ? hsc_r : core_r),
+    .G(hsc_en_lat ? hsc_g : core_g),
+    .B(hsc_en_lat ? hsc_b : core_b),
 
     .VGA_R(VGA_R),
     .VGA_G(VGA_G),
