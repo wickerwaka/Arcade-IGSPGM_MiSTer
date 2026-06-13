@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from util.ics2115_remote import WIDTH_LOWER8, WIDTH_UPPER8
 
-from .harness import Emit, quiesce
+from .harness import NUM_VOICES, Emit, quiesce
 
 
 def _pend_silent(ics, emit: Emit) -> None:
@@ -49,9 +49,23 @@ def _pend_silent(ics, emit: Emit) -> None:
     ics.write_reg(7, 0x00, 0x00, width=WIDTH_UPPER8)
 
 
+def _seed_pointer(ics, voice: int = 31) -> None:
+    """Precondition the IRQV round-robin pointer deterministically: pend one
+    sentinel voice, consume it so last_reported = voice.  Seeding 31 makes
+    any round-robin-from-last scan wrap to start at voice 0 — equivalent to a
+    from-zero scan, so the test result is independent of the hardware's scan
+    style and of whatever ran before."""
+    ics.write_reg(voice, 0x00, 0xA0, width=WIDTH_UPPER8)
+    for _ in range(NUM_VOICES + 1):
+        if (ics.read_reg(0, 0x0F, width=WIDTH_UPPER8) & 0xC0) == 0xC0:
+            break
+    ics.write_reg(voice, 0x00, 0x00, width=WIDTH_UPPER8)
+
+
 def _multi_pend_order(ics, emit: Emit) -> None:
-    # Pend three voices silently, then drain IRQV by hand: scan order and
-    # auto-clear granularity (one voice per read? both source bits?).
+    # Pend three voices, then drain IRQV by hand: scan order and auto-clear
+    # granularity.  Seed the pointer so the scan starts at voice 0.
+    _seed_pointer(ics)
     for voice in (9, 3, 17):
         ics.write_reg(voice, 0x00, 0xA0, width=WIDTH_UPPER8)
     drain = []
@@ -73,6 +87,7 @@ def _multi_pend_order(ics, emit: Emit) -> None:
 def _active_osc_gating(ics, emit: Emit) -> None:
     # Pend a voice above ActiveOsc: is it hidden from the IRQV scan, and does
     # it survive until ActiveOsc re-includes it? (0F-D / 0E-B)
+    _seed_pointer(ics)
     ics.write_reg(0, 0x0E, 0x0A, width=WIDTH_UPPER8)   # voices 0..10 active
     ics.write_reg(17, 0x00, 0xA0, width=WIDTH_UPPER8)
     irqv_gated = ics.read_reg(0, 0x0F, width=WIDTH_UPPER8)

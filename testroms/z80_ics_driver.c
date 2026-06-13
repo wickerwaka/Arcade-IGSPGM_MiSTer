@@ -446,6 +446,92 @@ static void clear_irq_log(void)
     irq_log_total = 0;
 }
 
+/* ── MDFourier sequencer ────────────────────────────────────────────────────
+   A script of {fc, pan, action, ticks} entries lives in shared RAM at
+   Z80_ICS_OFF_MDF_SCRIPT.  Each timer-0 IRQ holds the current entry one tick;
+   when its tick budget runs out the next entry is applied to voice 0.  Because
+   the ICS timer and the audio engine share the RTL clock, every step boundary
+   lands at the same sample offset on hardware and in the simulator. */
+static volatile u8  mdf_running;
+static volatile u16 mdf_count;
+static volatile u16 mdf_index;
+static volatile u16 mdf_remaining;
+
+static u16 mdf_entry_base(u16 i)
+{
+    return (u16)(Z80_ICS_OFF_MDF_SCRIPT + i * Z80_ICS_MDF_ENTRY_SIZE);
+}
+
+static void mdf_apply(u16 i)
+{
+    u16 base = mdf_entry_base(i);
+    u16 fc = get16(base);
+    u8 pan = SHARED[base + 2];
+    u8 act = SHARED[base + 3];
+    ics_write_reg(0, 0x01, Z80_ICS_WIDTH_16, fc);
+    ics_write_reg(0, 0x0c, Z80_ICS_WIDTH_UPPER8, pan);
+    ics_write_reg(0, 0x10, Z80_ICS_WIDTH_UPPER8,
+                  act == Z80_ICS_MDF_ACT_ON ? 0x00 : 0x0f);
+}
+
+static u16 mdf_entry_ticks(u16 i)
+{
+    return get16((u16)(mdf_entry_base(i) + 4));
+}
+
+/* Called from the timer-0 IRQ once per tick while a sequence is running. */
+static void mdf_tick(void)
+{
+    if (!mdf_running)
+        return;
+    if (mdf_remaining)
+        mdf_remaining--;
+    if (mdf_remaining == 0)
+    {
+        mdf_index++;
+        if (mdf_index >= mdf_count)
+        {
+            mdf_running = 0;
+            ics_write_reg(0, 0x10, Z80_ICS_WIDTH_UPPER8, 0x0f); /* silence */
+            return;
+        }
+        mdf_apply(mdf_index);
+        mdf_remaining = mdf_entry_ticks(mdf_index);
+    }
+}
+
+static void mdf_start(u16 value)
+{
+    u8 scale0 = (u8)(value >> 8);
+    u8 preset0 = (u8)value;
+    u8 sys;
+    u8 ctl;
+
+    /* Master run + voice-IRQ gates on (BIOS post-init state 0x0D / 0x4A=1). */
+    sys = (u8)ics_read_reg(0, 0x4d, Z80_ICS_WIDTH_LOWER8);
+    ics_write_reg(0, 0x4d, Z80_ICS_WIDTH_LOWER8, sys | 0x05);
+    ics_write_reg(0, 0x4a, Z80_ICS_WIDTH_LOWER8, 0x01);
+
+    /* Arm timer 0: scale (0x42) before preset (0x40) so the period uses the new
+       scale, then enable the timer-0 IRQ output via 0x43 bit 3. */
+    ics_write_reg(0, 0x42, Z80_ICS_WIDTH_LOWER8, scale0);
+    ics_write_reg(0, 0x40, Z80_ICS_WIDTH_LOWER8, preset0);
+    ctl = (u8)ics_read_reg(0, 0x43, Z80_ICS_WIDTH_LOWER8);
+    ics_write_reg(0, 0x43, Z80_ICS_WIDTH_LOWER8, ctl | 0x08);
+
+    mdf_index = 0;
+    if (mdf_count)
+    {
+        mdf_apply(0);
+        mdf_remaining = mdf_entry_ticks(0);
+        mdf_running = 1;
+    }
+    else
+    {
+        mdf_running = 0;
+    }
+}
+
 static void service_irq_c(void)
 {
     u8 status = ics_in_status();
@@ -460,6 +546,7 @@ static void service_irq_c(void)
         {
             irq_timer0_count++;
             (void)ics_read_reg(0, ICS_REG_TIMER0, Z80_ICS_WIDTH_LOWER8);
+            mdf_tick();
             handled = 1;
         }
         if (timer_status & 0x02)
@@ -627,6 +714,24 @@ static void process_command(void)
 
     case Z80_ICS_CMD_READ_STATUS:
         put16(Z80_ICS_OFF_RESULT, ics_in_status());
+        break;
+
+    case Z80_ICS_CMD_MDF_LOAD:
+        /* Script bytes are already in shared RAM; just latch the length. */
+        mdf_running = 0;
+        mdf_index = 0;
+        mdf_remaining = 0;
+        mdf_count = value > Z80_ICS_MDF_MAX_ENTRIES ? 0 : value;
+        put16(Z80_ICS_OFF_MDF_COUNT, mdf_count);
+        break;
+
+    case Z80_ICS_CMD_MDF_START:
+        mdf_start(value);
+        put16(Z80_ICS_OFF_RESULT, (mdf_running ? 0x8000 : 0) | (mdf_index & 0x7fff));
+        break;
+
+    case Z80_ICS_CMD_MDF_STATUS:
+        put16(Z80_ICS_OFF_RESULT, (mdf_running ? 0x8000 : 0) | (mdf_index & 0x7fff));
         break;
 
     default:

@@ -1,0 +1,13 @@
+{"_meta": {"target": "sim", "groups": ["t_aud"], "exclude": []}}
+{"obs": {"peak": 0, "rms_l": 0.0, "rms_r": 0.0, "zcr": 0.0}, "params": {}, "test_id": "t_aud.silence_floor"}
+{"obs": {"peak": 25273, "rms_l": 9169.3, "rms_r": 9762.5, "zcr": 0.5149}, "params": {"fmt": 2}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 24244, "rms_l": 8890.5, "rms_r": 9465.6, "zcr": 0.5089}, "params": {"fmt": 0}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 24784, "rms_l": 6951.2, "rms_r": 7400.9, "zcr": 0.5126}, "params": {"fmt": 1}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 25273, "rms_l": 9169.2, "rms_r": 9762.4, "zcr": 0.515}, "params": {"fmt": 3}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 32695, "rms_l": 12629.2, "rms_r": 0.0, "zcr": 0.515}, "params": {"pan": 0}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 29112, "rms_l": 11245.2, "rms_r": 6500.0, "zcr": 0.515}, "params": {"pan": 64}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 25273, "rms_l": 9169.2, "rms_r": 9762.4, "zcr": 0.515}, "params": {"pan": 128}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 30135, "rms_l": 5721.5, "rms_r": 11640.7, "zcr": 0.515}, "params": {"pan": 192}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 32695, "rms_l": 0.0, "rms_r": 12629.3, "zcr": 0.0}, "params": {"pan": 240}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 7, "rms_l": 2.4, "rms_r": 2.8, "zcr": 0.515}, "params": {"vol_acc": 16384}, "test_id": "t_aud.vol_levels"}
+{"obs": {"peak": 99, "rms_l": 36.0, "rms_r": 38.3, "zcr": 0.515}, "params": {"vol_acc": 32768}, "test_id": "t_aud.vol_levels"}

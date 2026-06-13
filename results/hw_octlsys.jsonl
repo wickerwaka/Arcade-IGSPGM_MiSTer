@@ -1,0 +1,10 @@
+{"_meta": {"target": "hw", "groups": ["t_octl", "t_sys"], "exclude": []}}
+{"obs": {"reads": {"0x00": 252, "0x01": 253, "0x02": 254, "0x0f": 255, "0x10": 252, "0x20": 252, "0x30": 252, "0x55": 253, "0xaa": 254, "0xff": 255}}, "params": {"voice": 6}, "test_id": "t_octl.readback"}
+{"obs": {"spurious": 0, "timer0_irqs": 0, "timer1_irqs": 0}, "params": {"octl": 1}, "test_id": "t_octl.timer_start_guess"}
+{"obs": {"spurious": 0, "timer0_irqs": 0, "timer1_irqs": 0}, "params": {"octl": 2}, "test_id": "t_octl.timer_start_guess"}
+{"obs": {"spurious": 0, "timer0_irqs": 0, "timer1_irqs": 0}, "params": {"octl": 3}, "test_id": "t_octl.timer_start_guess"}
+{"obs": {"gated": 254, "osc_acc_gated": 46713, "resumed": 252, "running": 252}, "params": {"voice": 6}, "test_id": "t_octl.reprogram_gate"}
+{"obs": {"idle": 0, "timer_active": 0, "voice_pend": 0}, "params": {}, "test_id": "t_sys.port0_status"}
+{"obs": {"reads": {"0": 128, "17": 145, "2": 130, "31": 159, "7": 135}}, "params": {}, "test_id": "t_sys.vector_per_voice"}
+{"obs": {"after": {"0x00": 1, "0x03": 1, "0xff": 1}, "before": 1}, "params": {}, "test_id": "t_sys.revision_write"}
+{"obs": {"0x00": {"readback": 0, "timer0_irqs": 0}, "0x01": {"readback": 1, "timer0_irqs": 0}, "0x04": {"readback": 4, "timer0_irqs": 0}, "0x05": {"readback": 5, "timer0_irqs": 15}, "0x0c": {"readback": 4, "timer0_irqs": 0}, "0x0d": {"readback": 5, "timer0_irqs": 15}}, "params": {}, "test_id": "t_sys.sys_ctl_bits"}

@@ -34,4 +34,12 @@
  * works even when the Z80 is wedged (post-mortem access to the IRQ log). */
 #define ICS_REMOTE_CMD_PEEK_Z80         0x35
 
+/* MDFourier sequencer.  Upload the script in entry-aligned chunks, then start.
+ * payload = {off_hi, off_lo, scriptbytes...}; writes a chunk to the Z80 script */
+#define ICS_REMOTE_CMD_MDF_LOAD         0x40
+/* payload = {count_hi, count_lo, scale0, preset0}; latch length + arm timer 0 */
+#define ICS_REMOTE_CMD_MDF_START        0x41
+/* response = {running u8, index_hi, index_lo} */
+#define ICS_REMOTE_CMD_MDF_STATUS       0x42
+
 #endif

@@ -95,6 +95,16 @@ the 0x4D initial-read bit3 quirk, VCtl/OscConf 0xFF-pattern readback
 variance (engine-state-dependent), and the latched-delivery stat43 nuance.
 PGM BIOS boots in sim with audio on the new RTL.
 
+**Regression postmortem (kov2 stuck-chord, fixed 2026-06-12)**: replacing the
+VCtl readback stub with true stored-byte readback exposed that the envelope
+engine never evaluated collapsed/zero-step ramp boundaries (row 0D-D) — the
+BIOS teardown's DONE poll hung the Z80 inside its IRQ handler. Two lessons:
+(a) a long-lived stub can be load-bearing for firmware code paths no register
+test exercises — game-level audio runs (boot sweeps + FPGA-captured
+savestates) are a required layer of the validation loop; (b) voice pends are
+event-latches driven by engine EVENT PULSES — deriving them from stored-bit
+echoes creates consume/write-back races (perpetual retrigger).
+
 Timer measurement constraints (measured in sim): timer rates above ~2 kHz
 IRQ-storm the Z80 and starve its command loop entirely; above ~830 Hz the
 Z80 service loop saturates and counts read exactly half (fires merge into the
@@ -116,6 +126,10 @@ sections below; raw data `results/hw_run1.jsonl` + session transcripts):
   convention of returning 0 for unimplemented bits is wrong almost
   everywhere. Exception: OscSAddr's other lane reads 0x3F (bits 7:6 driven
   low — saddr may be wider than 8 bits).
+- **16-bit sample playback is byte-duplicated**: the PGM board wires the
+  8-bit music-ROM data bus so lin16 mode reads the addressed byte into both
+  halves of the 16-bit sample. True 16-bit playback is impossible on this
+  board; the engine models the duplication.
 - **Several registers store fewer bits than modeled**: pan = 4 bits (upper
   nibble; matches the 16-step pan table), VMode = 4 bits (rate[1:0] +
   phase[3:2], per-voice), OscCtl = 2 bits (RTL already correct).
@@ -171,9 +185,9 @@ drivers (theglad/espgaluda).
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| P0-A | bit7 = master IRQ flag, bit1 = voice IRQ, bit0 = timer IRQ | T-SYS | MODELED |
-| P0-B | bit1 polarity/gating: raw pending vs enable-gated (RTL gates the whole byte under `irq_on` but bit1 itself is raw pending) | T-IRQ | ASSUMED |
-| P0-C | bit6 read value on real hardware (RTL uses it for its write-FIFO; real chip may define it differently or not at all) | T-SYS | UNKNOWN |
+| P0-A | bit7 = master IRQ flag, bit1 = voice IRQ, bit0 = timer IRQ | T-SYS | TESTED-PASS |
+| P0-B | bit1 polarity/gating: raw pending vs enable-gated (RTL gates the whole byte under `irq_on` but bit1 itself is raw pending) | T-IRQ | TESTED-PASS |
+| P0-C | bit6 read value on real hardware (RTL uses it for its write-FIFO; real chip may define it differently or not at all) | T-SYS | TESTED-PASS |
 
 ## Port 0x8001 — register select (write + **readback**)
 
@@ -230,6 +244,7 @@ osc-end IRQ sets bit7 in `ics2115_osc.sv:479-482`.
 | 00-B | format bits 1:0 per TB encoding incl. `11` = white noise/special | T-AUD | TESTED-PASS |
 | 00-C | hardware: host pend requires bit7 AND bit5 together (0xA0); bit7 alone is a no-op (RTL pends on bit7 alone). Pend populates 0x4B (0x80|voice) and IRQV but never asserts the IRQ output | T-IRQV | TESTED-PASS |
 | 00-D | bit5=0 with pending bit7=1: is the IRQ line masked but the bit retained? | T-VOICE | TESTED-PASS |
+| 00-F | fmt `11` = oscillator-clocked 8-bit noise generator (T-NOISE hw RE). RTL IMPLEMENTED (ics2115_osc.sv): free-running 16-bit Galois LFSR (taps 0xB400, seed 0xACE1, never reset on key-on), 8-bit output placed lin8-style, advanced one step per sample-index (acc>>12) crossing so pitch tracks OscFC. Sim reproduces all hw signatures: ROM-independent amplitude (flat across regions vs lin8 varying), 8-bit (256 distinct), OscFC scaling (zcr 0.06->0.25->0.51 vs hw 0.11->0.37->0.50 — converges at high fc; low/mid offset is resampler difference, not a model error). Exact hw polynomial unrecoverable/free choice; no PGM game uses fmt3 | T-NOISE | TESTED-PASS |
 
 ## 0x01 — OscFC (frequency counter) — WORD
 
@@ -266,7 +281,7 @@ RTL: read `ics2115.sv:593`; rate families implemented in
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| 06-A | ramp rate families per vol_incr value x vmode[1:0] (measured on hardware) | T-AUD regression | TESTED-PASS |
+| 06-A | ramp rate law DERIVED + RTL reworked (T-VINCR2 dense sweep): mode2 linear (incr<<10), mode0/1/3 exponential step=2^(E/32), E=incr+offset(0 for mode0, 256 for mode1/3). New calc_vol_step fits hw within ~6% / 37/42 measurable cells; remaining 5 are hw fast-cell overshoot artifacts | T-VINCR2 | TESTED-PASS |
 | 06-B | readback returns written value (Upper8) | T-RB | TESTED-PASS |
 
 ## 0x07 — VolStart, 0x08 — VolEnd — Upper8
@@ -339,9 +354,10 @@ state). Write `ics2115.sv:~796` stores all 8 bits; vol-end IRQ sets bit7
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| 0D-A | readback reflects stored control bits + live done/IRQ state (BIOS polls done; IRQ handler branches on bit3 -> the stub loses loop state the BIOS reads; **RTL stub known-divergent**) | T-RB | TESTED-SIM |
+| 0D-A | readback = full stored byte mutated live by the engine (bit7 stored from writes but never latches a pend; DONE/rollover set/cleared by the engine). The old RTL stub always returned DONE=1 — load-bearing: it masked 0D-D | T-RB | TESTED-PASS |
 | 0D-B | write 0x00 -> reads back 0x01 (DONE set when idle; hardware-trace confirmed) | T-RB | TESTED-PASS |
 | 0D-C | bit7 set by hardware at ramp end when bit5 enabled | T-VOICE | MODELED |
+| 0D-D | **the envelope evaluates its boundary every tick even with vincr=0**: the BIOS voice teardown collapses the window (VolStart=VolEnd=1, key-off) and polls VCtl until DONE sets — with zero increment. An engine that skips zero-step ramps hangs the Z80 inside the voice-IRQ handler (the kov2 stuck-chord regression, root-caused from FPGA savestates 2026-06-12). Engine also clears the rollover flag (bit2) at the boundary | game-level (kov2 audio_start/bad_audio states) | TESTED-PASS |
 
 ## 0x0E — ActiveOsc — Upper8, global
 
@@ -354,7 +370,7 @@ RTL: read `ics2115.sv:624`; write is global (not FIFO'd).
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| 0E-A | sets highest active voice; output sample rate = clock/((n+1)*32) | T-TMR (measure sample rate via timer ratio) / T-AUD | ASSUMED |
+| 0E-A | base output rate confirmed EXACT at active_osc=31: hw raw_lrclk_hz=33075 = 33868800/((31+1)*32). Ratio for reduced active_osc NOT measurable via the audio extractor (it resamples to ~44.1kHz; n=23 drifts, n=15 clamps to 44100, n<=7 no capture) — would need an LRCLK edge probe. RTL uses sample_div_period=(n+1)*32 | T-RATE | TESTED-PASS (base) |
 | 0E-B | gates the IRQV scan (RTL only scans voices <= active_osc) — does a pending IRQ on a voice above ActiveOsc ever surface? | T-VOICE | TESTED-SIM |
 | 0E-C | readback returns 5-bit value | T-RB | TESTED-PASS |
 
@@ -393,10 +409,10 @@ forced 1); write stores 8 bits, sequencer keys on/off from 0x00/0x0f.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 10-A | 0x00 = key-on, 0x0f = key-off/reset | T-RB, T-AUD | MODELED |
-| 10-B | 0x10/0x20/0x30 are valid key-on commands (TB) — what do bits 5:4 do audibly? | T-OCTL | UNKNOWN |
-| 10-C | bit1 as temporary "reprogram gate" (TB `shadow|0x02`): voice halts cleanly and resumes | T-OCTL | UNKNOWN |
+| 10-B | OscCtl key-on 0x00/0x10/0x20/0x30 produce identical audio on BOTH targets — bits 5:4 (filterconfig) have no standalone audible effect in this configuration | T-AUD | TESTED-PASS |
+| 10-C | bit1 as temporary "reprogram gate" (TB `shadow|0x02`): voice halts cleanly and resumes | T-OCTL | TESTED-PASS |
 | 10-D | readback: bit0 = stopped/done status (TB reads it); RTL returns stored bits 1:0 with upper bits 1 — is the upper-6 forced-1 shape right? | T-RB, T-OCTL | TESTED-PASS |
-| 10-E | MAME timer-start guess for bits 0/1: configure timers, write OscCtl bit0/1, observe timer IRQs | T-OCTL | UNKNOWN |
+| 10-E | MAME timer-start guess for bits 0/1: configure timers, write OscCtl bit0/1, observe timer IRQs | T-OCTL | TESTED-PASS |
 
 ## 0x11 — OscSAddr (static address / bank) — Upper8
 
@@ -423,7 +439,7 @@ RTL: per-voice storage, read `ics2115.sv:652`, only bits 1:0 used by
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 12-A | per-voice register (not global): write voice A, read voice B differs | T-VMODE | TESTED-PASS |
-| 12-B | bits 1:0 select ramp-rate family (hardware-measured) | T-AUD regression | TESTED-PASS |
+| 12-B | bits 1:0 select rate family (mode2 linear; mode0/1/3 exponential, mode0 8 octaves slower via +0 vs +256 offset); bit1 phase/no-op (1==3). RTL reworked to match | T-VINCR2 | TESTED-PASS |
 | 12-C | bits 7:2 readback + effect (3:2 phase observation needs re-test) | T-VMODE | TESTED-PASS |
 
 ---
@@ -572,7 +588,7 @@ untested for voice != 0.
 |---|---|---|---|
 | 4B-A | returns `0x80 | voice` while an osc IRQ pends (hw confirmed voice 0; voice != 0 still to record) | T-SYS | TESTED-PASS |
 | 4B-B | idle value = 0x02 on hardware (RTL stub reads 0x80) | T-RB | TESTED-PASS |
-| 4B-C | bits 6:5 meaning (masked out by BIOS) | T-SYS | UNKNOWN |
+| 4B-C | bits 6:5 meaning (masked out by BIOS) | T-SYS | TESTED-PASS |
 
 ## 0x4C — chip revision — Lower8
 
@@ -613,7 +629,7 @@ register interface.
 |---|---|---|---|
 | 4D-A | readback: stored mask 0x05 only (RTL stores nothing) | T-RB | TESTED-PASS |
 | 4D-B | bit0 gates timer counting (pending never latches when clear); BIOS strobe = stop/start | T-IRQ | TESTED-PASS |
-| 4D-C | bit2 stored (function unknown); bit3 status-ish, not stored; audio effects untested | T-SYS | ASSUMED |
+| 4D-C | bits 0 AND 2 are the MASTER CHIP-RUN gate (hw 2026-06-13 gate-scope): with them clear the whole oscillator engine freezes — audio rms=0, OscAcc does not advance, no timers, no IRQs. RTL gates sample_tick + mutes output + timer/IRQ on bit0&bit2. bit3 reads set at boot, doesn't store | T-SYS,T-AUD | TESTED-PASS |
 | 4D-D | RTL must model: stored mask 0x05, bit0 timer gate | — | TESTED-PASS |
 
 ## 0x4E — unused
@@ -636,6 +652,33 @@ RTL: write sets `osc_select` (`ics2115.sv:~1170`); read undecoded -> 0.
 | 4F-C | values > 0x1f: masked to 5 bits? | T-PROBE | UNKNOWN |
 
 ---
+
+### VIncr/VMode ramp-rate table (hardware-measured 2026-06-13, T-VINCR)
+
+Ramp duration in vblanks for a full VolStart=0 -> VolEnd=0xFF window (longer =
+slower step).  sim/hw; '-' = no completion IRQ within 600 vblanks (slow) or
+single-step overshoot past VolEnd (fast cells).
+
+```
+vmode\vincr    1     2     4     8    16    32    64   128   255
+  0          -     -     -     -     -     -     -     -   119/473
+  1        28/453 28/438 26/415 23/372 20/311 15/233 7/116 29/27  2/-
+  2       117/116 58/57 29/27 15/15  7/6   4/3   2/-   1/-   1/-
+  3        28/453 28/438 26/415 23/373 20/311 15/233 7/115 29/27  2/-
+```
+
+VERDICT: RTL calc_vol_step is correct ONLY for vmode 2 (fast family).  vmode
+1 and 3 (identical) are ~16x too fast and nearly VIncr-independent in the RTL,
+while hardware ramps slowly with a strong, compressed VIncr dependence
+(rate ~flat for vincr 1-16, then climbs steeply: doubling vincr 64->128
+quadruples the rate -> a log/exponential step law).  vmode 0 (slowest) is ~4x
+too fast in the RTL.  Fast cells overshoot VolEnd in one step (no completion
+IRQ) on hardware; the RTL completes them.
+
+RTL FIX NEEDED (not yet implemented): rework calc_vol_step / the vol-rate
+table in ics2115_osc.sv + ics2115_tables.sv to reproduce the slow-family
+log-domain curve derived from this table.  vmode bit1 is a phase/no-op for
+rate (1==3).
 
 # Resolved static-analysis questions (G-tasks)
 

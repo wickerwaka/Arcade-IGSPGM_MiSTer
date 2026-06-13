@@ -18,8 +18,9 @@ typedef signed long s32;
 
 #define Z80_ICS_SHARED_OFFSET 0x7000
 #define Z80_ICS_MAGIC         0x1c5d
-/* 0x1c51: original command set; 0x1c52: adds IRQ event log (0x32/0x33). */
-#define Z80_ICS_DRIVER_MAGIC  0x1c52
+/* 0x1c51: original command set; 0x1c52: adds IRQ event log (0x32/0x33);
+ * 0x1c53: adds the MDFourier timer-IRQ sequencer (0x40/0x41/0x42). */
+#define Z80_ICS_DRIVER_MAGIC  0x1c53
 
 #define Z80_ICS_STATUS_EMPTY  0x00
 #define Z80_ICS_STATUS_READY  0x10
@@ -44,6 +45,29 @@ typedef signed long s32;
 #define Z80_ICS_CMD_CLEAR_IRQ_LOG    0x33
 /* result = raw ICS status port (0x8000) read */
 #define Z80_ICS_CMD_READ_STATUS      0x34
+
+/* MDFourier sequencer (driver magic >= 0x1c53).  The host writes a script of
+ * Z80_ICS_MDF_MAX_ENTRIES entries into shared RAM at Z80_ICS_OFF_MDF_SCRIPT and
+ * the entry count at Z80_ICS_OFF_MDF_COUNT, then issues these commands.  The
+ * sequence is advanced entirely from the ICS timer-0 IRQ handler so it is
+ * sample-locked and identical on hardware and in the simulator. */
+/* value = (timer0 scale<<8) | timer0 preset; arms timer 0 and starts at entry 0 */
+#define Z80_ICS_CMD_MDF_START        0x41
+/* value = entry count; latch the script length already written to shared RAM */
+#define Z80_ICS_CMD_MDF_LOAD         0x40
+/* result = (running?0x8000:0) | (current entry index & 0x7fff) */
+#define Z80_ICS_CMD_MDF_STATUS       0x42
+
+/* One script step applied to voice 0 on its hold boundary.
+ *   fc     : OscFC (reg 0x01) — sets the looped-sample repeat pitch
+ *   pan    : Pan   (reg 0x0c, upper8)
+ *   action : Z80_ICS_MDF_ACT_*  (key the oscillator on or off)
+ *   ticks  : timer-0 IRQs to hold this step (1 tick == 1 MDFourier frame) */
+#define Z80_ICS_MDF_ACT_OFF   0    /* osc_ctl = 0x0f -> output forced to silence */
+#define Z80_ICS_MDF_ACT_ON    1    /* osc_ctl = 0x00 -> looped sample plays      */
+
+#define Z80_ICS_MDF_ENTRY_SIZE 6   /* fc_hi fc_lo pan action ticks_hi ticks_lo */
+#define Z80_ICS_MDF_MAX_ENTRIES 256
 
 #define Z80_ICS_WIDTH_16       0
 #define Z80_ICS_WIDTH_UPPER8   1
@@ -107,7 +131,15 @@ typedef struct Z80_ICS_PACKED
 #define Z80_ICS_IRQ_LOG_KIND_IRQV     1
 #define Z80_ICS_IRQ_LOG_KIND_SPURIOUS 2
 
-#define Z80_ICS_SHARED_SIZE \
+/* MDFourier script storage lives after the IRQ log.  The script bytes sit in
+ * shared RAM and are read directly by the timer IRQ during playback (no copy);
+ * the host fills them with z80_ics_mdf_load_chunk() and the count with
+ * Z80_ICS_CMD_MDF_LOAD. */
+#define Z80_ICS_OFF_MDF_COUNT \
     (Z80_ICS_OFF_LOG_DATA + Z80_ICS_IRQ_LOG_MAX * Z80_ICS_IRQ_LOG_ENTRY_SIZE)
+#define Z80_ICS_OFF_MDF_SCRIPT (Z80_ICS_OFF_MDF_COUNT + 2)
+
+#define Z80_ICS_SHARED_SIZE \
+    (Z80_ICS_OFF_MDF_SCRIPT + Z80_ICS_MDF_MAX_ENTRIES * Z80_ICS_MDF_ENTRY_SIZE)
 
 #endif

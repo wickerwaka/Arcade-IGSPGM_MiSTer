@@ -41,6 +41,14 @@ bool z80_ics_read_status_port(u16 *result);
 /* Raw Z80-RAM read over the bus; no Z80 cooperation needed. */
 void z80_ics_peek(u16 offset, u8 *out, u16 len);
 
+/* MDFourier sequencer.  Fill the script with one or more entry-aligned chunks
+   (byte_off/len multiples of Z80_ICS_MDF_ENTRY_SIZE), latch the count, then
+   start.  scale0/preset0 program ICS timer 0 (one IRQ == one MDFourier frame). */
+void z80_ics_mdf_load_chunk(u16 byte_off, const u8 *data, u16 len);
+bool z80_ics_mdf_load(u16 count);
+bool z80_ics_mdf_start(u8 scale0, u8 preset0);
+bool z80_ics_mdf_status(u8 *running, u16 *index);
+
 void set_osc_acc(z80_ics_voice_t *voice, u32 addr);
 
 void z80_ics_make_sample_voice(u8 preset, z80_ics_voice_t *voice);

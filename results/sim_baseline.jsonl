@@ -78,7 +78,7 @@
 {"obs": {"read": 255, "read16": 65535}, "params": {"wrote": 31}, "test_id": "t_rb.active_osc"}
 {"obs": {"read": 245, "read16": 62975}, "params": {"wrote": 21}, "test_id": "t_rb.active_osc"}
 {"obs": {"read": 255, "read16": 65535}, "params": {"wrote": 255}, "test_id": "t_rb.active_osc"}
-{"obs": {"hi8": 34, "w16": 58111}, "params": {}, "test_id": "t_rb.irqv_idle"}
+{"obs": {"hi8": 98, "w16": 58111}, "params": {}, "test_id": "t_rb.irqv_idle"}
 {"obs": {"read": 120}, "params": {"reg": 64, "wrote": 0}, "test_id": "t_rb.timer_preset"}
 {"obs": {"read": 120}, "params": {"reg": 64, "wrote": 127}, "test_id": "t_rb.timer_preset"}
 {"obs": {"read": 120}, "params": {"reg": 64, "wrote": 255}, "test_id": "t_rb.timer_preset"}

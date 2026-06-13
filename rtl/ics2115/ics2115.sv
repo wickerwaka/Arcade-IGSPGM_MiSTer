@@ -283,7 +283,10 @@ module ics2115
             sample_tick <= 1'b0;
             if (ss_state_write_pulse && ss_state_write_addr == SS_WORD_SAMPLE) begin
                 sample_div_counter <= ss_state_write_data[15:0];
-            end else if (!ss_busy_local && ce) begin
+            end else if (!ss_busy_local && ce && sys_ctl[0] && sys_ctl[2]) begin
+                // 0x4D bits 0&2 are the master chip-run gate (hw 2026-06-13):
+                // with them clear, the oscillator engine freezes — no sample
+                // ticks, no voice advance, no audio (output muted below).
                 if (sample_div_counter >= sample_div_period - 16'd1) begin
                     sample_div_counter <= 16'd0;
                     sample_tick        <= 1'b1;
@@ -431,6 +434,13 @@ module ics2115
             audio_valid  <= 1'b0;
             seq_voice_wr <= 1'b0;
 
+            // Master run gate (0x4D bits 0&2): mute the output to true silence
+            // while frozen (hw shows rms=0, not a held value).
+            if (!(sys_ctl[0] & sys_ctl[2])) begin
+                audio_left  <= 16'sd0;
+                audio_right <= 16'sd0;
+            end
+
             if (ss_state_write_pulse || ss_state == SS_VOICE_WRITE_COMMIT) begin
                 seq_state <= SEQ_IDLE;
                 seq_voice_idx <= 5'd0;
@@ -561,8 +571,12 @@ module ics2115
         // 0x43 read), while the pending BIT persists until the 16-bit preset
         // ack.  Voice INT is a level of (pend & per-voice enable & 0x4A gate)
         // — measured: only clearing the enable/condition deasserts it.
+        // Hardware (T-SYS isolation 2026-06-13): 0x4D bits 0 AND 2 are the
+        // master IRQ/run gate — with them clear, NEITHER timer NOR voice IRQs
+        // reach the host (delivery only at 0x4D=0x05).  Timer counting is
+        // already gated in the counter block; gate the voice term here too.
         irq_on = |timer_int
-              | ((|irq_enabled) &
+              | (sys_ctl[0] & sys_ctl[2] & (|irq_enabled) &
                  |((osc_irq_en & osc_irq_pending) | (vol_irq_en & vol_irq_pending)));
     end
 
@@ -973,7 +987,7 @@ module ics2115
                                 SS_WORD_GLOBAL0: ssbus.read_response(SS_IDX, {32'd0, 1'd0, last_irq_voice, vmode, reg_select, osc_select, active_osc});
                                 SS_WORD_GLOBAL1: ssbus.read_response(SS_IDX, {32'd0, 8'd0, irq_enabled, irq_pending});
                                 SS_WORD_SAMPLE: ssbus.read_response(SS_IDX, {32'd0, 7'd0, ramp_cnt, sample_div_counter});
-                                SS_WORD_TIMER0_CFG: ssbus.read_response(SS_IDX, {32'd0, 7'd0, sys_ctl, timer_running[0], timer_scale[0], timer_preset[0]});
+                                SS_WORD_TIMER0_CFG: ssbus.read_response(SS_IDX, {32'd0, 5'd0, timer_int, sys_ctl, timer_running[0], timer_scale[0], timer_preset[0]});
                                 SS_WORD_TIMER0_COUNT: ssbus.read_response(SS_IDX, {40'd0, timer_count[0]});
                                 SS_WORD_TIMER0_PERIOD: ssbus.read_response(SS_IDX, {40'd0, timer_period[0]});
                                 SS_WORD_TIMER1_CFG: ssbus.read_response(SS_IDX, {32'd0, 15'd0, timer_running[1], timer_scale[1], timer_preset[1]});
@@ -1098,6 +1112,9 @@ module ics2115
                         // run bit was set.
                         sys_ctl <= |(ss_state_write_data[24:17]) ? (ss_state_write_data[24:17] & 8'h05)
                                  : (ss_state_write_data[16] ? 8'h05 : 8'h00);
+                        // INT event latches (legacy states carry 0: one
+                        // in-flight tick may be lost at restore, harmless)
+                        timer_int <= ss_state_write_data[26:25];
                     end
                     SS_WORD_TIMER0_COUNT: timer_count[0] <= ss_state_write_data[23:0];
                     SS_WORD_TIMER0_PERIOD: timer_period[0] <= ss_state_write_data[23:0];
@@ -1328,8 +1345,11 @@ module ics2115
             if (stat43_rd_clear)
                 timer_int <= 2'b00;
 
-            // ── Timer counter logic (gated by ce and the 0x4D run bit) ──
-            if (ce && sys_ctl[0]) begin
+            // ── Timer counter logic ──
+            // Hardware (T-SYS 2026-06-13): timer counting requires 0x4D bits 0
+            // AND 2 both set (0x01 alone does not run; 0x05 does).  The BIOS
+            // post-init state 0x0D has both, so games are unaffected.
+            if (ce && sys_ctl[0] && sys_ctl[2]) begin
                 for (int t = 0; t < 2; t++) begin
                     if (timer_running[t]) begin
                         if (timer_count[t] == 24'd0) begin

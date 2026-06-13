@@ -52,7 +52,7 @@
 {"obs": {"read": 175, "read16": 45055}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
 {"obs": {"read": 95, "read16": 24575}, "params": {"reg": 12, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
 {"obs": {"read": 0, "read16": 255}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
-{"obs": {"read": 62, "read16": 16127}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
+{"obs": {"read": 255, "read16": 65535}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 255}, "test_id": "t_rb.voice_readback"}
 {"obs": {"read": 170, "read16": 43775}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 170}, "test_id": "t_rb.voice_readback"}
 {"obs": {"read": 85, "read16": 22015}, "params": {"reg": 13, "voice": 2, "width": "hi8", "wrote": 85}, "test_id": "t_rb.voice_readback"}
 {"obs": {"read": 252, "read16": 64767}, "params": {"reg": 16, "voice": 2, "width": "hi8", "wrote": 0}, "test_id": "t_rb.voice_readback"}
@@ -169,8 +169,8 @@
 {"obs": {"first": 1, "pended": true, "second": 1}, "params": {}, "test_id": "t_irq.stat43_sticky"}
 {"obs": {"conf_readback": 0, "irqv": 226}, "params": {"voice": 7}, "test_id": "t_irqv.pend_nolatch"}
 {"obs": {"conf_after_irqv_reads": 32, "conf_readback": 160, "irqv_first": 103, "irqv_second": 231, "vec_4b": [135, 135], "z80_osc_irqs": 0}, "params": {"voice": 7}, "test_id": "t_irqv.pend_silent"}
-{"obs": {"irqv_sequence": [99, 113, 241], "vec_4b_sequence": [131, 145, 17]}, "params": {"voices_pend_order": [9, 3, 17]}, "test_id": "t_irqv.multi_pend_order"}
-{"obs": {"irqv_after_drain": 241, "irqv_after_ungate": 113, "irqv_while_gated": 241}, "params": {"active_osc_gate": 10, "voice": 17}, "test_id": "t_irqv.active_osc_gating"}
+{"obs": {"irqv_sequence": [105, 113, 99, 227], "vec_4b_sequence": [137, 145, 131, 3]}, "params": {"voices_pend_order": [9, 3, 17]}, "test_id": "t_irqv.multi_pend_order"}
+{"obs": {"irqv_after_drain": 241, "irqv_after_ungate": 113, "irqv_while_gated": 227}, "params": {"active_osc_gate": 10, "voice": 17}, "test_id": "t_irqv.active_osc_gating"}
 {"obs": {"conf_after": 160, "irqv_after": 101, "log": [], "z80_osc_irqs": 0, "z80_spurious": 0, "z80_vol_irqs": 0}, "params": {"voice": 5}, "test_id": "t_irqv.pend_enabled"}
 {"obs": {"conf_after": 0, "irqv_after": 228, "log": [["irqv", 100, 130]], "vec_4b_after": 4, "z80_osc_irqs": 2, "z80_spurious": 0, "z80_vol_irqs": 0}, "params": {"conf": 32, "voice": 4}, "test_id": "t_voice.oneshot_end_irq"}
 {"obs": {"conf_after": 160, "z80_osc_irqs": 0}, "params": {"conf": 32, "irq_4a": 0, "voice": 4}, "test_id": "t_voice.oneshot_gated"}

@@ -1,0 +1,23 @@
+{"_meta": {"target": "hw", "groups": ["t_aud"], "exclude": []}}
+{"obs": {"peak": 0, "rms_l": 0.0, "rms_r": 0.0, "zcr": 0.0}, "params": {}, "test_id": "t_aud.silence_floor"}
+{"obs": {"peak": 24207, "rms_l": 8111.2, "rms_r": 8635.9, "zcr": 0.5314}, "params": {"fmt": 2}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 24308, "rms_l": 8309.6, "rms_r": 8847.1, "zcr": 0.5275}, "params": {"fmt": 0}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 24784, "rms_l": 7090.9, "rms_r": 7549.6, "zcr": 0.5216}, "params": {"fmt": 1}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 24784, "rms_l": 7123.7, "rms_r": 7584.5, "zcr": 0.5249}, "params": {"fmt": 3}, "test_id": "t_aud.tone_fmt"}
+{"obs": {"peak": 31556, "rms_l": 11826.2, "rms_r": 0.0, "zcr": 0.5221}, "params": {"pan": 0}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 28098, "rms_l": 10305.9, "rms_r": 5957.1, "zcr": 0.5254}, "params": {"pan": 64}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 24392, "rms_l": 8252.3, "rms_r": 8786.1, "zcr": 0.5293}, "params": {"pan": 128}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 29086, "rms_l": 5318.9, "rms_r": 10821.5, "zcr": 0.5226}, "params": {"pan": 192}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 31556, "rms_l": 0.0, "rms_r": 11536.9, "zcr": 0.0}, "params": {"pan": 240}, "test_id": "t_aud.pan_levels"}
+{"obs": {"peak": 6, "rms_l": 2.2, "rms_r": 2.4, "zcr": 0.5226}, "params": {"vol_acc": 16384}, "test_id": "t_aud.vol_levels"}
+{"obs": {"peak": 95, "rms_l": 32.9, "rms_r": 35.1, "zcr": 0.5259}, "params": {"vol_acc": 32768}, "test_id": "t_aud.vol_levels"}
+{"obs": {"peak": 1528, "rms_l": 540.5, "rms_r": 575.4, "zcr": 0.528}, "params": {"vol_acc": 49152}, "test_id": "t_aud.vol_levels"}
+{"obs": {"peak": 24392, "rms_l": 8503.2, "rms_r": 9053.3, "zcr": 0.5228}, "params": {"vol_acc": 65535}, "test_id": "t_aud.vol_levels"}
+{"obs": {"peak": 0, "ramp_samples": -1}, "params": {"vmode": 0}, "test_id": "t_aud.vmode_ramp"}
+{"obs": {"peak": 6, "ramp_samples": -1}, "params": {"vmode": 1}, "test_id": "t_aud.vmode_ramp"}
+{"obs": {"peak": 22514, "ramp_samples": 3264}, "params": {"vmode": 2}, "test_id": "t_aud.vmode_ramp"}
+{"obs": {"peak": 6, "ramp_samples": -1}, "params": {"vmode": 3}, "test_id": "t_aud.vmode_ramp"}
+{"obs": {"peak": 24392, "rms_l": 8501.6, "rms_r": 9051.5, "zcr": 0.5228}, "params": {"ctl": 0}, "test_id": "t_aud.octl_variants"}
+{"obs": {"peak": 24392, "rms_l": 8360.3, "rms_r": 8901.2, "zcr": 0.5275}, "params": {"ctl": 16}, "test_id": "t_aud.octl_variants"}
+{"obs": {"peak": 24392, "rms_l": 8532.5, "rms_r": 9084.4, "zcr": 0.5227}, "params": {"ctl": 32}, "test_id": "t_aud.octl_variants"}
+{"obs": {"peak": 24392, "rms_l": 8382.1, "rms_r": 8924.3, "zcr": 0.5264}, "params": {"ctl": 48}, "test_id": "t_aud.octl_variants"}

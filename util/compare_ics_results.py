@@ -24,8 +24,32 @@ TOLERANCES: list[tuple[str, str, float]] = [
     ("t_tmr.", "other_timer_count", 1),
     ("t_tmr.", "spurious", 2),
     ("t_voice.loop_end_irqs", "z80_osc_irqs", 1),
+    ("t_octl.reprogram_gate", "osc_acc_gated", 4096),  # free-running osc accumulator sample
     ("t_voice.oneshot_end_irq", "z80_osc_irqs", 1),
 ]
+
+
+# Relative tolerances (fraction of the larger magnitude) for audio metrics:
+# analog of timing tolerance — capture windows land at different phases.
+REL_TOLERANCES: list[tuple[str, str, float]] = [
+    ("t_aud.", "rms_l", 0.15),
+    ("t_aud.sys_gate", "rms_l", 0.15),
+    ("t_aud.", "rms_r", 0.15),
+    ("t_aud.", "peak", 0.20),
+    ("t_aud.", "zcr", 0.10),
+    ("t_aud.", "ramp_samples", 0.15),
+    ("t_rate.", "spv", 0.15),
+    ("t_rate.", "zcr_ratio_vs31", 0.15),
+    ("t_rate.", "zcr", 0.12),
+    ("t_rate.", "vblanks", 0.20),
+]
+
+
+def field_rel_tolerance(test_id: str, field: str) -> float:
+    for prefix, name, tol in REL_TOLERANCES:
+        if test_id.startswith(prefix) and field == name:
+            return tol
+    return 0
 
 
 def field_tolerance(test_id: str, field: str) -> float:
@@ -41,8 +65,10 @@ def obs_equal(test_id: str, obs_a: dict, obs_b: dict) -> bool:
     for field, va in obs_a.items():
         vb = obs_b[field]
         tol = field_tolerance(test_id, field)
-        if tol and isinstance(va, (int, float)) and isinstance(vb, (int, float)):
-            if abs(va - vb) > tol:
+        rel = field_rel_tolerance(test_id, field)
+        if isinstance(va, (int, float)) and isinstance(vb, (int, float)) and (tol or rel):
+            bound = max(tol, rel * max(abs(va), abs(vb)))
+            if abs(va - vb) > bound:
                 return False
         elif va != vb:
             return False

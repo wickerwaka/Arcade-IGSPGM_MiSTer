@@ -234,6 +234,51 @@ static void handle_get_irq_log(u8 seq, u8 clear)
     send_response(seq, ICS_REMOTE_STATUS_OK, out, (u8)(1 + count * 4));
 }
 
+static void handle_mdf_load(u8 seq, const u8 *payload, u8 len)
+{
+    u16 off;
+    if (len < 3)
+    {
+        send_response(seq, ICS_REMOTE_STATUS_BAD_LENGTH, NULL, 0);
+        return;
+    }
+    off = ((u16)payload[0] << 8) | payload[1];
+    z80_ics_mdf_load_chunk(off, payload + 2, (u16)(len - 2));
+    send_response(seq, ICS_REMOTE_STATUS_OK, NULL, 0);
+}
+
+static void handle_mdf_start(u8 seq, const u8 *payload, u8 len)
+{
+    u16 count;
+    if (len != 4)
+    {
+        send_response(seq, ICS_REMOTE_STATUS_BAD_LENGTH, NULL, 0);
+        return;
+    }
+    count = ((u16)payload[0] << 8) | payload[1];
+    if (!z80_ics_mdf_load(count) || !z80_ics_mdf_start(payload[2], payload[3]))
+    {
+        send_ics_error(seq);
+        return;
+    }
+    send_response(seq, ICS_REMOTE_STATUS_OK, NULL, 0);
+}
+
+static void handle_mdf_status(u8 seq)
+{
+    u8 running = 0;
+    u16 index = 0;
+    u8 out[3];
+    if (!z80_ics_mdf_status(&running, &index))
+    {
+        send_ics_error(seq);
+        return;
+    }
+    out[0] = running;
+    put_be16(out + 1, index);
+    send_response(seq, ICS_REMOTE_STATUS_OK, out, sizeof(out));
+}
+
 static void handle_request(const u8 *req)
 {
     u8 seq = req[3];
@@ -301,6 +346,15 @@ static void handle_request(const u8 *req)
         send_response(seq, ICS_REMOTE_STATUS_OK, out, sizeof(out));
         break;
     }
+    case ICS_REMOTE_CMD_MDF_LOAD:
+        handle_mdf_load(seq, payload, len);
+        break;
+    case ICS_REMOTE_CMD_MDF_START:
+        handle_mdf_start(seq, payload, len);
+        break;
+    case ICS_REMOTE_CMD_MDF_STATUS:
+        if (len == 0) handle_mdf_status(seq); else send_response(seq, ICS_REMOTE_STATUS_BAD_LENGTH, NULL, 0);
+        break;
     default:
         send_response(seq, ICS_REMOTE_STATUS_BAD_CMD, NULL, 0);
         break;

@@ -49,6 +49,12 @@ CMD_GET_IRQ_COUNTS_TIMED = 0x32
 CMD_GET_IRQ_LOG = 0x33
 CMD_READ_STATUS = 0x34
 CMD_PEEK_Z80 = 0x35
+CMD_MDF_LOAD = 0x40
+CMD_MDF_START = 0x41
+CMD_MDF_STATUS = 0x42
+
+MDF_ENTRY_SIZE = 6
+MDF_MAX_ENTRIES = 256
 
 IRQ_LOG_KIND_TIMER = 0
 IRQ_LOG_KIND_IRQV = 1
@@ -901,6 +907,35 @@ class ICS2115Remote:
         if len(payload) != 2:
             raise ICSRemoteProtocolError(f"bad status payload length {len(payload)}")
         return struct.unpack(">H", payload)[0]
+
+    # ── MDFourier timer-IRQ sequencer ───────────────────────────────────────
+    def mdf_load(self, script: bytes) -> None:
+        """Upload the packed sequencer script into Z80 shared RAM.
+
+        ``script`` is N*6 bytes of {fc:u16, pan:u8, action:u8, ticks:u16}
+        big-endian entries (see util.mdfourier.signal.pack_script).
+        """
+        if len(script) % MDF_ENTRY_SIZE != 0:
+            raise ValueError(f"script length must be a multiple of {MDF_ENTRY_SIZE}")
+        if len(script) // MDF_ENTRY_SIZE > MDF_MAX_ENTRIES:
+            raise ValueError(f"script has too many entries (max {MDF_MAX_ENTRIES})")
+        # Keep each remote payload (offset u16 + bytes) within the 255-byte cap,
+        # rounded down to a whole number of entries (42*6 = 252).
+        chunk = (252 // MDF_ENTRY_SIZE) * MDF_ENTRY_SIZE
+        for off in range(0, len(script), chunk):
+            part = script[off:off + chunk]
+            self._request(CMD_MDF_LOAD, struct.pack(">H", off) + part)
+
+    def mdf_start(self, count: int, scale0: int, preset0: int) -> None:
+        """Latch the script length and arm ICS timer 0 to begin the sequence."""
+        self._request(CMD_MDF_START, struct.pack(">HBB", count & 0xFFFF, scale0 & 0xFF, preset0 & 0xFF))
+
+    def mdf_status(self) -> tuple[bool, int]:
+        """Return (running, current_entry_index)."""
+        payload = self._request(CMD_MDF_STATUS)
+        if len(payload) != 3:
+            raise ICSRemoteProtocolError(f"bad mdf status payload length {len(payload)}")
+        return bool(payload[0]), struct.unpack(">H", payload[1:3])[0]
 
     def open_audio(self, port: Optional[str] = None, *, latest_capacity: int = 65536):
         open_sim_audio = getattr(self.picorom, "open_audio", None)

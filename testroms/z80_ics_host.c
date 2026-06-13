@@ -409,6 +409,41 @@ bool z80_ics_read_status_port(u16 *result)
     return true;
 }
 
+void z80_ics_mdf_load_chunk(u16 byte_off, const u8 *data, u16 len)
+{
+    /* Write script bytes straight into shared RAM (no Z80 cooperation); the
+       sequencer reads them from there.  byte_off and len are entry-aligned
+       (6-byte entries) so the word packing never splits an entry. */
+    z80_bus_take();
+    z80_write_bytes_as_words((u16)(Z80_ICS_SHARED_OFFSET + Z80_ICS_OFF_MDF_SCRIPT + byte_off), data, len);
+    z80_bus_release();
+}
+
+bool z80_ics_mdf_load(u16 count)
+{
+    return command_simple(Z80_ICS_CMD_MDF_LOAD, 0, 0, 0, count, NULL);
+}
+
+bool z80_ics_mdf_start(u8 scale0, u8 preset0)
+{
+    return command_simple(Z80_ICS_CMD_MDF_START, 0, 0, 0, ((u16)scale0 << 8) | preset0, NULL);
+}
+
+bool z80_ics_mdf_status(u8 *running, u16 *index)
+{
+    u16 result;
+    if (!command_simple(Z80_ICS_CMD_MDF_STATUS, 0, 0, 0, 0, NULL))
+        return false;
+    z80_bus_take();
+    result = shared_read16(Z80_ICS_OFF_RESULT);
+    z80_bus_release();
+    if (running)
+        *running = (result & 0x8000) ? 1 : 0;
+    if (index)
+        *index = result & 0x7fff;
+    return true;
+}
+
 void set_osc_acc(z80_ics_voice_t *voice, u32 addr)
 {
     voice->osc_acc_hi = (addr >> 4) & 0xffff;
