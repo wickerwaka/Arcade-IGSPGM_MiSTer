@@ -122,7 +122,6 @@ module ics2115
                 && (host_state == HOST_IDLE)
                 && !(|host_voice_wr_pending)
                 && !irqv_ram_clear_pending
-                && !(irqv_clear_osc || irqv_clear_vol)
                 && (seq_state == SEQ_IDLE);
     assign ss_ready = ss_safe;
 
@@ -217,6 +216,13 @@ module ics2115
     logic [4:0] osc_select;
     logic [7:0] reg_select;     // latched register address from port 1
     logic [7:0] vmode;
+    // 0x4D system control: hardware stores only bits 0 and 2 (mask 0x05);
+    // bit 0 gates timer counting entirely.
+    logic [7:0] sys_ctl;
+    // Last voice reported through IRQV/0x4B: hardware retains it in the idle
+    // values of both registers (boot value 0x02 observed on real hardware;
+    // origin unidentified, kept for record convergence).
+    logic [4:0] last_irq_voice;
 
     // =========================================================================
     // IRQ system registers
@@ -225,10 +231,7 @@ module ics2115
     logic [7:0] irq_enabled;    // system IRQ enable mask (register 0x4A write)
     logic       irq_on;         // computed IRQ state
 
-    // IRQV auto-clear side-effect signals (registered — cleared after the host read cycle completes)
-    logic       irqv_clear_osc;
-    logic       irqv_clear_vol;
-    logic [4:0] irqv_clear_voice;
+    // (IRQV is not clear-on-read on hardware; no clear side-effect signals.)
 
     // =========================================================================
     // Timer registers (two independent programmable timers)
@@ -241,6 +244,10 @@ module ics2115
 
     // Timer IRQ clear side-effect signals (like IRQV clear — registered)
     logic        timer_irq_clear [0:1];
+    // Timer INT event latches: set on fire (when 0x43-enabled), cleared by a
+    // 0x43 read; separate from the persistent pending bits.
+    logic [1:0]  timer_int;
+    logic        stat43_rd_clear;
 
     // =========================================================================
     // Tables instance
@@ -276,7 +283,10 @@ module ics2115
             sample_tick <= 1'b0;
             if (ss_state_write_pulse && ss_state_write_addr == SS_WORD_SAMPLE) begin
                 sample_div_counter <= ss_state_write_data[15:0];
-            end else if (!ss_busy_local && ce) begin
+            end else if (!ss_busy_local && ce && sys_ctl[0] && sys_ctl[2]) begin
+                // 0x4D bits 0&2 are the master chip-run gate (hw 2026-06-13):
+                // with them clear, the oscillator engine freezes — no sample
+                // ticks, no voice advance, no audio (output muted below).
                 if (sample_div_counter >= sample_div_period - 16'd1) begin
                     sample_div_counter <= 16'd0;
                     sample_tick        <= 1'b1;
@@ -424,6 +434,13 @@ module ics2115
             audio_valid  <= 1'b0;
             seq_voice_wr <= 1'b0;
 
+            // Master run gate (0x4D bits 0&2): mute the output to true silence
+            // while frozen (hw shows rms=0, not a held value).
+            if (!(sys_ctl[0] & sys_ctl[2])) begin
+                audio_left  <= 16'sd0;
+                audio_right <= 16'sd0;
+            end
+
             if (ss_state_write_pulse || ss_state == SS_VOICE_WRITE_COMMIT) begin
                 seq_state <= SEQ_IDLE;
                 seq_voice_idx <= 5'd0;
@@ -549,13 +566,52 @@ module ics2115
     // Matches MAME recalc_irq(): scans all 32 voices for pending IRQs
     // =========================================================================
     always_comb begin
-        irq_on = |(irq_pending & irq_enabled)
-              | |((osc_irq_en & osc_irq_pending) | (vol_irq_en & vol_irq_pending));
+        // Hardware model: the timer INT is an event latch (set on fire when
+        // the 0x43 enable bit — bit3 = t0, bit4 = t1 — is set; cleared by a
+        // 0x43 read), while the pending BIT persists until the 16-bit preset
+        // ack.  Voice INT is a level of (pend & per-voice enable & 0x4A gate)
+        // — measured: only clearing the enable/condition deasserts it.
+        // Hardware (T-SYS isolation 2026-06-13): 0x4D bits 0 AND 2 are the
+        // master IRQ/run gate — with them clear, NEITHER timer NOR voice IRQs
+        // reach the host (delivery only at 0x4D=0x05).  Timer counting is
+        // already gated in the counter block; gate the voice term here too.
+        irq_on = |timer_int
+              | (sys_ctl[0] & sys_ctl[2] & (|irq_enabled) &
+                 |((osc_irq_en & osc_irq_pending) | (vol_irq_en & vol_irq_pending)));
     end
 
     assign host_irq = irq_on;
 
     // =========================================================================
+    // IRQV pend model (hardware-measured 2026-06-12): per-voice pends are
+    // event latches set by (bit7&bit5) writes or real oscillator events and
+    // cleared ONLY by an IRQV read (a persistent end-condition immediately
+    // re-latches — observed as the "IRQ storm").  The scan is ROUND-ROBIN
+    // starting after the last reported voice; 0x4B shares the scan but does
+    // not consume.
+    logic       irqv_rr_found;
+    logic [4:0] irqv_rr_voice;
+    logic       irqv_rr_osc;
+    logic       irqv_rr_vol;
+    always_comb begin
+        irqv_rr_found = 1'b0;
+        irqv_rr_voice = 5'd0;
+        irqv_rr_osc   = 1'b0;
+        irqv_rr_vol   = 1'b0;
+        for (int k = 1; k <= NUM_VOICES; k++) begin
+            logic [4:0] v;
+            v = last_irq_voice + k[4:0];
+            if (v <= active_osc && !irqv_rr_found) begin
+                if (osc_irq_pending[v] || vol_irq_pending[v]) begin
+                    irqv_rr_found = 1'b1;
+                    irqv_rr_voice = v;
+                    irqv_rr_osc   = osc_irq_pending[v];
+                    irqv_rr_vol   = vol_irq_pending[v];
+                end
+            end
+        end
+    end
+
     // Register read mux — matches MAME reg_read() layout
     // =========================================================================
     logic [15:0] reg_read_data;
@@ -567,36 +623,43 @@ module ics2115
         reg_read_data = 16'd0;
         irqv_found = 0;
 
-        if (reg_select < 8'h20) begin
+        // Selects 0x20-0x3F mirror the voice registers (5-bit decode,
+        // hardware-measured: 0x2F reads IRQV, 0x21 reads OscFC, ...).
+        if (reg_select < 8'h40) begin
             case (reg_select[4:0])
                 // 0x00: Oscillator Configuration 
                 5'h00: begin
-                    reg_read_data = { reg_read_voice.osc_conf, 8'h00 };
+                    // Full stored byte; bit7 = pend state (hardware-faithful)
+                    reg_read_data = { reg_read_voice.osc_conf, 8'hFF };
                 end
 
-                // 0x01: Wavesample frequency (16-bit, no shift)
-                5'h01: reg_read_data = reg_read_voice.osc_fc;
+                // Hardware readback conventions (measured 2026-06-11): voice
+                // registers drive only their implemented lanes/bits; everything
+                // unimplemented reads as 1 (pulled high).
+
+                // 0x01: Wavesample frequency — bit 0 reads as 1
+                5'h01: reg_read_data = {reg_read_voice.osc_fc[15:1], 1'b1};
 
                 // 0x02: Wavesample loop start high (bits 28:13 of 29-bit addr)
                 5'h02: reg_read_data = reg_read_voice.osc_start[28:13];
 
                 // 0x03: Wavesample loop start low (bits 12:5 in high byte)
-                5'h03: reg_read_data = {reg_read_voice.osc_start[12:5], 8'h00};
+                5'h03: reg_read_data = {reg_read_voice.osc_start[12:5], 8'hFF};
 
                 // 0x04: Wavesample loop end high
                 5'h04: reg_read_data = reg_read_voice.osc_end[28:13];
 
                 // 0x05: Wavesample loop end low
-                5'h05: reg_read_data = {reg_read_voice.osc_end[12:5], 8'h00};
+                5'h05: reg_read_data = {reg_read_voice.osc_end[12:5], 8'hFF};
 
                 // 0x06: Volume Increment — high byte
-                5'h06: reg_read_data = {reg_read_voice.vol_incr, 8'h00};
+                5'h06: reg_read_data = {reg_read_voice.vol_incr, 8'hFF};
 
                 // 0x07: Volume Start — high byte maps to bits 25:18
-                5'h07: reg_read_data = {reg_read_voice.vol_start[25:18], 8'h00};
+                5'h07: reg_read_data = {reg_read_voice.vol_start[25:18], 8'hFF};
 
                 // 0x08: Volume End — high byte maps to bits 25:18
-                5'h08: reg_read_data = {reg_read_voice.vol_end[25:18], 8'h00};
+                5'h08: reg_read_data = {reg_read_voice.vol_end[25:18], 8'hFF};
 
                 // 0x09: Volume accumulator (bits 25:10 of 26-bit value)
                 5'h09: reg_read_data = reg_read_voice.vol_acc[25:10];
@@ -604,74 +667,93 @@ module ics2115
                 // 0x0A: Wavesample address high (osc_acc bits 28:13)
                 5'h0A: reg_read_data = reg_read_voice.osc_acc[28:13];
 
-                // 0x0B: Wavesample address low — MAME returns (acc >> 0) & 0xFFF8
-                // Our 29-bit acc maps: MAME bits [15:3] → our bits [12:0]
-                // Mask 0xFFF8 clears bottom 3 bits. Return {osc_acc[12:0], 3'b000}.
-                5'h0B: reg_read_data = {reg_read_voice.osc_acc[12:0], 3'b000};
+                // 0x0B: Wavesample address low — bits 2:0 read as 1 on hardware
+                5'h0B: reg_read_data = {reg_read_voice.osc_acc[12:0], 3'b111};
 
-                // 0x0C: Pan — pan value in high byte
-                5'h0C: reg_read_data = {reg_read_voice.vol_pan, 8'h00};
+                // 0x0C: Pan — only 4 bits stored (16-step table); low nibble reads 1
+                5'h0C: reg_read_data = {reg_read_voice.vol_pan[7:4], 4'hF, 8'hFF};
 
-                // 0x0D: Volume Envelope Control — stub for T02 IRQ work
-                5'h0D: begin
-                    if (reg_read_voice.vol_mode[1:0] == 2'd0)
-                        reg_read_data = {(reg_read_voice.vol_ctrl[VOL_IRQ] ? 8'h81 : 8'h01), 8'h00};
-                    else
-                        reg_read_data = {8'h01, 8'h00};
-                end
+                // 0x0D: Volume Envelope Control — true stored-byte readback
+                5'h0D: reg_read_data = {reg_read_voice.vol_ctrl, 8'hFF};
 
-                // 0x0E: Active Voices (5-bit)
-                5'h0E: reg_read_data = {11'h000, active_osc};
+                // 0x0E: Active Voices — 5 bits stored, upper 3 read as 1
+                5'h0E: reg_read_data = {3'b111, active_osc, 8'hFF};
 
-                // 0x0F: IRQV — scan voices for first pending IRQ
-                // Returns voice_idx | 0xE0, bit 7 cleared if osc pending, bit 6 cleared if vol pending
+                // 0x0F: IRQV — round-robin scan from the last reported voice;
+                // reading consumes the reported pend (side effect in the
+                // sequential block); idle retains the last reported voice.
                 5'h0F: begin
-                    reg_read_data = 16'hFF00;  // default: no pending
-                    irqv_found = 1'b0;
-                    for (int i = 0; i < NUM_VOICES; i++) begin
-                        if (i[4:0] <= active_osc && !irqv_found) begin
-                            if (osc_irq_pending[i] || vol_irq_pending[i]) begin
-                                irqv_found = 1'b1;
-                                reg_read_data[15:8] = {3'b111, i[4:0]};
-                                if (osc_irq_pending[i])
-                                    reg_read_data[15] = 1'b0;  // clear bit 7 = osc source
-                                if (vol_irq_pending[i])
-                                    reg_read_data[14] = 1'b0;  // clear bit 6 = vol source
-                            end
-                        end
-                    end
+                    if (irqv_rr_found)
+                        reg_read_data = {~irqv_rr_osc, ~irqv_rr_vol, 1'b1, irqv_rr_voice, 8'hFF};
+                    else
+                        reg_read_data = {3'b111, last_irq_voice, 8'hFF};
                 end
 
-                // 0x10: Oscillator Control — osc_ctl in high byte
-                5'h10: reg_read_data = {6'b111111, reg_read_voice.osc_ctl[1:0], 8'h00};
+                // 0x10: Oscillator Control — 2 bits stored, upper 6 read as 1
+                5'h10: reg_read_data = {6'b111111, reg_read_voice.osc_ctl[1:0], 8'hFF};
 
-                // 0x11: Wavesample static address — saddr in high byte
-                5'h11: reg_read_data = {reg_read_voice.osc_saddr, 8'h00};
+                // 0x11: Wavesample static address — low lane reads 0x3F on
+                // hardware (bits 7:6 driven low; saddr may be wider than 8 bits)
+                5'h11: reg_read_data = {reg_read_voice.osc_saddr, 8'h3F};
 
-                // 0x12: Per-voice VMode — only low two bits affect the rate family
-                5'h12: reg_read_data = {reg_read_voice.vol_mode, 8'h00};
+                // 0x12: Per-voice VMode — 4 bits stored (rate[1:0]+phase[3:2])
+                5'h12: reg_read_data = {4'hF, reg_read_voice.vol_mode[3:0], 8'hFF};
 
-                default: reg_read_data = 16'd0;
+                // 0x13-0x1F: reserved, read as pulled-high
+                default: reg_read_data = 16'hFFFF;
             endcase
         end else begin
             case (reg_select)
-                // 0x40/0x41: Timer presets — read returns preset, side effect clears IRQ
-                8'h40: reg_read_data = {8'h00, timer_preset[0]};
-                8'h41: reg_read_data = {8'h00, timer_preset[1]};
+                // 0x40-0x42 are write-only on hardware: reads return the open
+                // bus value 0x78 on both lanes (the 0x40/0x41 read still acks
+                // the timer IRQ — side effect handled separately).
+                8'h40: reg_read_data = 16'h7878;
+                8'h41: reg_read_data = 16'h7878;
+                8'h42: reg_read_data = 16'h7878;
 
-                // 0x43: Timer status — returns pending bits 0-1
-                8'h43: reg_read_data = {8'h00, 6'd0, irq_pending[1:0]};
+                // 0x43: control bits [7:3] read back, plus pending bits 1:0
+                8'h43: reg_read_data = {timer_scale[1][7:3], 1'b0, irq_pending[1:0],
+                                        timer_scale[1][7:3], 1'b0, irq_pending[1:0]};
 
-                // 0x4A: IRQ enabled/pending — read returns irq_pending
-                8'h4A: reg_read_data = {8'h00, irq_pending};
+                // 0x4A: reads constant 0x02 on hardware (not pending, not enable)
+                8'h4A: reg_read_data = 16'h0202;
 
-                // 0x4B: Address of Interrupting Oscillator — fixed 0x80
-                8'h4B: reg_read_data = {8'h00, 8'h80};
+                // 0x4B: osc IRQ vector — 0x80|voice while pending (same
+                // round-robin scan as IRQV, but non-consuming), else the last
+                // event voice with the valid bit clear
+                8'h4B: begin
+                    if (irqv_rr_found && irqv_rr_osc)
+                        reg_read_data = {{1'b1, 2'b00, irqv_rr_voice}, {1'b1, 2'b00, irqv_rr_voice}};
+                    else
+                        reg_read_data = {{3'b000, last_irq_voice}, {3'b000, last_irq_voice}};
+                end
 
-                // 0x4C: Chip Revision
-                8'h4C: reg_read_data = {8'h00, CHIP_REVISION};
+                // 0x4C: Chip Revision (write-insensitive)
+                8'h4C: reg_read_data = {CHIP_REVISION, CHIP_REVISION};
 
-                default: reg_read_data = 16'd0;
+                // 0x4D: system control — stored mask 0x05
+                8'h4D: reg_read_data = {sys_ctl, sys_ctl};
+
+                // 0x4F: oscillator select reads back
+                8'h4F: reg_read_data = {{3'b000, osc_select}, {3'b000, osc_select}};
+
+                // DMA/monitor block constants (hardware-measured; function
+                // unprobed beyond reads)
+                8'h46: reg_read_data = 16'h4646;
+                8'h47: reg_read_data = 16'h0000;
+                8'h48: reg_read_data = 16'hC0C0;
+                8'h49: reg_read_data = 16'h0000;
+                // Undocumented registers above the select map (hardware-measured)
+                8'h50: reg_read_data = 16'h7474;
+                8'h51: reg_read_data = 16'h4D4D;
+                8'h52: reg_read_data = 16'h7D7D;
+                8'h53: reg_read_data = 16'h8888;
+                8'h54: reg_read_data = 16'h0000;
+                8'h55: reg_read_data = 16'h0000;
+                8'h56: reg_read_data = 16'h20A0;
+                8'h57: reg_read_data = 16'h5050;
+                // 0x44/0x45/0x4E and everything else: open bus
+                default: reg_read_data = 16'h7878;
             endcase
         end
     end
@@ -693,44 +775,33 @@ module ics2115
         any_voice_irq = |osc_irq_pending | |vol_irq_pending;
     end
 
-    // IRQV auto-clear computation: combinational scan for which voice to clear
-    // Used by the registered irqv_clear_* signals below
-    logic       irqv_clear_osc_next;
-    logic       irqv_clear_vol_next;
-    logic [4:0] irqv_clear_voice_next;
-    logic       irqv_clear_found;
-    always_comb begin
-        irqv_clear_osc_next   = 1'b0;
-        irqv_clear_vol_next   = 1'b0;
-        irqv_clear_voice_next = 5'd0;
-        irqv_clear_found      = 1'b0;
-        if (host_rd_done_pulse && host_addr == 2'd3 && reg_select == 8'h0F) begin
-            for (int i = 0; i < NUM_VOICES; i++) begin
-                if (i[4:0] <= active_osc && !irqv_clear_found) begin
-                    if (osc_irq_pending[i] || vol_irq_pending[i]) begin
-                        irqv_clear_found      = 1'b1;
-                        irqv_clear_voice_next = i[4:0];
-                        irqv_clear_osc_next   = osc_irq_pending[i];
-                        irqv_clear_vol_next   = vol_irq_pending[i];
-                    end
-                end
-            end
-        end
-    end
+    // IRQV consume pulse: a high-byte read of 0x0F (or its 0x2F mirror).
+    wire irqv_consume = host_rd_done_pulse && host_addr == 2'd3 &&
+                        reg_select < 8'h40 && reg_select[4:0] == 5'h0F &&
+                        irqv_rr_found;
 
-    // Timer IRQ auto-clear computation: detect reads of 0x40 or 0x41
-    // Reading timer preset clears the corresponding timer IRQ pending bit
+    // Timer IRQ ack: hardware clears pending only on a full 16-bit preset
+    // read (a high-byte read immediately following a low-byte read of the
+    // same register); lone lo8 or hi8 reads do not ack.
+    logic [7:0] prev_rd_reg;
+    logic       prev_rd_was_lo;
     logic timer_irq_clear_next [0:1];
     always_comb begin
         timer_irq_clear_next[0] = 1'b0;
         timer_irq_clear_next[1] = 1'b0;
-        if (host_rd_done_pulse && (host_addr == 2'd2 || host_addr == 2'd3)) begin
+        if (host_rd_done_pulse && host_addr == 2'd3 &&
+            prev_rd_was_lo && prev_rd_reg == reg_select) begin
             if (reg_select == 8'h40)
                 timer_irq_clear_next[0] = 1'b1;
             else if (reg_select == 8'h41)
                 timer_irq_clear_next[1] = 1'b1;
         end
     end
+
+    // Reading 0x43 (either byte) drops the timer INT latches.
+    assign stat43_rd_clear = host_rd_done_pulse &&
+                             (host_addr == 2'd2 || host_addr == 2'd3) &&
+                             reg_select == 8'h43;
 
     always_comb begin
         case (host_addr)
@@ -740,8 +811,8 @@ module ics2115
                 host_dout[6] = (host_fifo_count != '0) | (|host_voice_wr_pending) | (host_state != HOST_IDLE);  // bit 6: buffered voice write pending
                 if (irq_on) begin
                     host_dout[7] = 1'b1;  // bit 7: any IRQ active
-                    if (irq_enabled != 8'd0 && (irq_pending & 8'h03) != 8'h00)
-                        host_dout[0] = 1'b1;  // bit 0: timer IRQ pending & enabled
+                    if (|timer_int)
+                        host_dout[0] = 1'b1;  // bit 0: timer INT latched
                     if (any_voice_irq)
                         host_dout[1] = 1'b1;  // bit 1: voice osc IRQ pending
                 end
@@ -765,7 +836,9 @@ module ics2115
         result = voice;
         if (high_byte) begin
             case (reg_addr[4:0])
-                5'h00: result.osc_conf       = data[7:0];
+                // Hardware: bit7 (pend) only stores when bit5 (IRQ enable) is
+                // also written — 0x80 alone is a no-op, 0xA0 pends.
+                5'h00: result.osc_conf       = {data[7] & data[5], data[6:0]};
                 5'h01: result.osc_fc[15:8]   = data[7:0];
                 5'h02: result.osc_start[28:21] = data[7:0];
                 5'h03: result.osc_start[12:5]  = data[7:0];
@@ -778,6 +851,9 @@ module ics2115
                 5'h0A: result.osc_acc[28:21]   = data[7:0];
                 5'h0B: result.osc_acc[12:5]    = data[7:0];
                 5'h0C: result.vol_pan          = data[7:0];
+                // VCtl stores all 8 bits (hardware echoes bit7) but a host
+                // write never latches a vol PEND — the sideband is set from
+                // engine event pulses only.
                 5'h0D: result.vol_ctrl         = data[7:0];
                 5'h10: begin
                     result.osc_ctl = data[7:0];
@@ -850,6 +926,11 @@ module ics2115
     end
 
     wire host_voice_wr_can_buffer = !host_fifo_full || host_fifo_pop_now;
+    // Commit pushes two entries (latched lo + hi) in one cycle.
+    wire host_voice_wr_can_buffer2 =
+        (host_fifo_count + (host_fifo_pop_now ? 0 : 1)) <= (HOST_FIFO_DEPTH[HOST_FIFO_BITS:0] - 2'd2);
+    // Low-byte holding latch for the voice-register write scheme.
+    logic [7:0] host_lo_latch;
 
     assign host_ready = !host_fifo_full;
     assign host_voice_wr_apply = (host_state == HOST_WR_COMMIT);
@@ -903,10 +984,10 @@ module ics2115
                             ss_state <= SS_WAIT_IDLE;
                         end else begin
                             case (ssbus.addr)
-                                SS_WORD_GLOBAL0: ssbus.read_response(SS_IDX, {32'd0, 8'd0, vmode, reg_select, osc_select, active_osc});
+                                SS_WORD_GLOBAL0: ssbus.read_response(SS_IDX, {32'd0, 1'd0, last_irq_voice, vmode, reg_select, osc_select, active_osc});
                                 SS_WORD_GLOBAL1: ssbus.read_response(SS_IDX, {32'd0, 8'd0, irq_enabled, irq_pending});
                                 SS_WORD_SAMPLE: ssbus.read_response(SS_IDX, {32'd0, 7'd0, ramp_cnt, sample_div_counter});
-                                SS_WORD_TIMER0_CFG: ssbus.read_response(SS_IDX, {32'd0, 15'd0, timer_running[0], timer_scale[0], timer_preset[0]});
+                                SS_WORD_TIMER0_CFG: ssbus.read_response(SS_IDX, {32'd0, 5'd0, timer_int, sys_ctl, timer_running[0], timer_scale[0], timer_preset[0]});
                                 SS_WORD_TIMER0_COUNT: ssbus.read_response(SS_IDX, {40'd0, timer_count[0]});
                                 SS_WORD_TIMER0_PERIOD: ssbus.read_response(SS_IDX, {40'd0, timer_period[0]});
                                 SS_WORD_TIMER1_CFG: ssbus.read_response(SS_IDX, {32'd0, 15'd0, timer_running[1], timer_scale[1], timer_preset[1]});
@@ -963,9 +1044,12 @@ module ics2115
             vmode      <= 8'd0;
             irq_pending <= 8'd0;
             irq_enabled <= 8'd0;
-            irqv_clear_osc   <= 1'b0;
-            irqv_clear_vol   <= 1'b0;
-            irqv_clear_voice <= 5'd0;
+            sys_ctl     <= 8'd0;
+            host_lo_latch <= 8'd0;
+            timer_int   <= 2'b00;
+            last_irq_voice <= 5'd2;  // observed hardware boot value
+            prev_rd_reg    <= 8'd0;
+            prev_rd_was_lo <= 1'b0;
             timer_irq_clear[0] <= 1'b0;
             timer_irq_clear[1] <= 1'b0;
             host_voice_wr_voice <= 5'd0;
@@ -1000,8 +1084,6 @@ module ics2115
                 host_fifo_count <= '0;
                 irqv_ram_clear_pending <= 1'b0;
                 host_state <= HOST_IDLE;
-                irqv_clear_osc <= 1'b0;
-                irqv_clear_vol <= 1'b0;
                 timer_irq_clear[0] <= 1'b0;
                 timer_irq_clear[1] <= 1'b0;
                 case (ss_state_write_addr)
@@ -1010,6 +1092,7 @@ module ics2115
                         osc_select <= ss_state_write_data[9:5];
                         reg_select <= ss_state_write_data[17:10];
                         vmode <= ss_state_write_data[25:18];
+                        last_irq_voice <= ss_state_write_data[30:26];
                     end
                     SS_WORD_GLOBAL1: begin
                         irq_pending <= ss_state_write_data[7:0];
@@ -1023,6 +1106,15 @@ module ics2115
                         timer_preset[0] <= ss_state_write_data[7:0];
                         timer_scale[0] <= ss_state_write_data[15:8];
                         timer_running[0] <= ss_state_write_data[16] & |ss_state_write_data[7:0];
+                        // Legacy savestates (pre-sys_ctl) carry 0 here; they
+                        // were all captured from BIOS-driven flows where the
+                        // 0x4D strobe had run, so a running timer implies the
+                        // run bit was set.
+                        sys_ctl <= |(ss_state_write_data[24:17]) ? (ss_state_write_data[24:17] & 8'h05)
+                                 : (ss_state_write_data[16] ? 8'h05 : 8'h00);
+                        // INT event latches (legacy states carry 0: one
+                        // in-flight tick may be lost at restore, harmless)
+                        timer_int <= ss_state_write_data[26:25];
                     end
                     SS_WORD_TIMER0_COUNT: timer_count[0] <= ss_state_write_data[23:0];
                     SS_WORD_TIMER0_PERIOD: timer_period[0] <= ss_state_write_data[23:0];
@@ -1083,18 +1175,28 @@ module ics2115
                 endcase
             end
 
+            // Pends are event latches: writes/events can only SET them (OR);
+            // the only clear is the IRQV consume below (which also scrubs the
+            // RAM copy via the irqv_ram_clear path).
             if (seq_voice_wr) begin
                 osc_irq_en[seq_wr_idx] <= seq_wr_data.osc_conf[OSC_IRQ];
-                osc_irq_pending[seq_wr_idx] <= seq_wr_data.osc_conf[OSC_IRQ_PEND];
+                // Set pends from the engine's EVENT PULSES, not the RAM bit7
+                // echo: a write-back of stale stored bit7 racing an IRQV
+                // consume would re-assert the INT forever (voice retrigger
+                // loop — stuck repeating notes in game music).
+                if (osc_irq_osc)
+                    osc_irq_pending[seq_wr_idx] <= 1'b1;
                 vol_irq_en[seq_wr_idx] <= seq_wr_data.vol_ctrl[VOL_IRQ];
-                vol_irq_pending[seq_wr_idx] <= seq_wr_data.vol_ctrl[VOL_IRQ_PEND];
+                if (osc_irq_vol)
+                    vol_irq_pending[seq_wr_idx] <= 1'b1;
             end
 
             if (host_voice_wr_apply) begin
                 osc_irq_en[host_voice_wr_voice] <= host_voice_wr_data.osc_conf[OSC_IRQ];
-                osc_irq_pending[host_voice_wr_voice] <= host_voice_wr_data.osc_conf[OSC_IRQ_PEND];
+                osc_irq_pending[host_voice_wr_voice] <= osc_irq_pending[host_voice_wr_voice] | host_voice_wr_data.osc_conf[OSC_IRQ_PEND];
                 vol_irq_en[host_voice_wr_voice] <= host_voice_wr_data.vol_ctrl[VOL_IRQ];
-                vol_irq_pending[host_voice_wr_voice] <= host_voice_wr_data.vol_ctrl[VOL_IRQ_PEND];
+                // vol pends are NOT host-settable (hardware: VCtl bit7 writes
+                // latch nothing; only real envelope events pend)
             end
 
             // ── Host bus port writes ──
@@ -1105,17 +1207,27 @@ module ics2115
                     end
                     2'd3: begin
                         // High-byte write — per-voice writes are buffered, globals are direct.
-                        if (reg_select < 8'h20) begin
+                        // Hardware write scheme for voice registers (measured
+                        // 2026-06-12): the low-byte port only LATCHES; the
+                        // high-byte write COMMITS {hi, latched_lo} and clears
+                        // the latch.  A lone hi8 write therefore commits lo=0,
+                        // and a lone lo8 write changes nothing.
+                        if (reg_select < 8'h40) begin
                             case (reg_select[4:0])
                                 5'h0E: active_osc <= host_din[4:0];
                                 default: begin
-                                    if (host_voice_wr_can_buffer) begin
+                                    if (host_voice_wr_can_buffer2) begin
                                         host_fifo_voice[host_fifo_tail] <= osc_select;
                                         host_fifo_reg[host_fifo_tail] <= reg_select;
-                                        host_fifo_data[host_fifo_tail] <= host_din[7:0];
-                                        host_fifo_high[host_fifo_tail] <= 1'b1;
-                                        host_fifo_tail <= host_fifo_tail + 1'b1;
-                                        host_fifo_count <= host_fifo_pop_now ? host_fifo_count : (host_fifo_count + 1'b1);
+                                        host_fifo_data[host_fifo_tail] <= host_lo_latch;
+                                        host_fifo_high[host_fifo_tail] <= 1'b0;
+                                        host_fifo_voice[host_fifo_tail + 1'b1] <= osc_select;
+                                        host_fifo_reg[host_fifo_tail + 1'b1] <= reg_select;
+                                        host_fifo_data[host_fifo_tail + 1'b1] <= host_din[7:0];
+                                        host_fifo_high[host_fifo_tail + 1'b1] <= 1'b1;
+                                        host_fifo_tail <= host_fifo_tail + 2'd2;
+                                        host_fifo_count <= host_fifo_pop_now ? (host_fifo_count + 1'b1) : (host_fifo_count + 2'd2);
+                                        host_lo_latch <= 8'd0;
                                     end
                                 end
                             endcase
@@ -1127,20 +1239,12 @@ module ics2115
                         end
                     end
                     2'd2: begin
-                        // Low-byte write — per-voice writes are buffered, globals are direct.
-                        if (reg_select < 8'h20) begin
+                        // Low-byte write — voice registers only latch the byte
+                        // (committed by the next high-byte write); globals are direct.
+                        if (reg_select < 8'h40) begin
                             case (reg_select[4:0])
                                 5'h0E: ;
-                                default: begin
-                                    if (host_voice_wr_can_buffer) begin
-                                        host_fifo_voice[host_fifo_tail] <= osc_select;
-                                        host_fifo_reg[host_fifo_tail] <= reg_select;
-                                        host_fifo_data[host_fifo_tail] <= host_din[7:0];
-                                        host_fifo_high[host_fifo_tail] <= 1'b0;
-                                        host_fifo_tail <= host_fifo_tail + 1'b1;
-                                        host_fifo_count <= host_fifo_pop_now ? host_fifo_count : (host_fifo_count + 1'b1);
-                                    end
-                                end
+                                default: host_lo_latch <= host_din[7:0];
                             endcase
                         end else begin
                             case (reg_select)
@@ -1148,31 +1252,57 @@ module ics2115
                                 // WaveFront firmware disarms timers by writing
                                 // preset=0 (including from its own IRQ handler) and
                                 // arms a deferred-service alarm with preset=1.
+                                // Hardware timer model (measured 2026-06-11):
+                                //   timer 0: period = ((scale0[4:0]+1)*(preset0+1)) << (4+scale0[7:5]);
+                                //            stops when preset==0 OR scale mult field==0
+                                //   timer 1: period = (preset1+1) << (4+ctl[7:5]) — shift-only, no mult
+                                //   0x43 (stored in timer_scale[1]) is the control byte:
+                                //            [7:5]=t1 shift, bit4=t1 IRQ enable, bit3=t0 IRQ enable
                                 8'h40: begin
                                     timer_preset[0] <= host_din[7:0];
                                     timer_period[0] <= (({19'd0, timer_scale[0][4:0]} + 24'd1) * ({16'd0, host_din[7:0]} + 24'd1)) << (4 + timer_scale[0][7:5]);
                                     timer_count[0]  <= (({19'd0, timer_scale[0][4:0]} + 24'd1) * ({16'd0, host_din[7:0]} + 24'd1)) << (4 + timer_scale[0][7:5]);
-                                    timer_running[0] <= |host_din[7:0];
+                                    timer_running[0] <= |host_din[7:0] && |timer_scale[0][4:0];
+                                    // Stopping via preset=0 clears pending + INT (hw)
+                                    if (host_din[7:0] == 8'd0) begin
+                                        irq_pending[0] <= 1'b0;
+                                        timer_int[0] <= 1'b0;
+                                    end
                                 end
                                 8'h41: begin
                                     timer_preset[1] <= host_din[7:0];
-                                    timer_period[1] <= (({19'd0, timer_scale[1][4:0]} + 24'd1) * ({16'd0, host_din[7:0]} + 24'd1)) << (4 + timer_scale[1][7:5]);
-                                    timer_count[1]  <= (({19'd0, timer_scale[1][4:0]} + 24'd1) * ({16'd0, host_din[7:0]} + 24'd1)) << (4 + timer_scale[1][7:5]);
-                                    timer_running[1] <= |host_din[7:0];
+                                    timer_period[1] <= ({16'd0, host_din[7:0]} + 24'd1) << (4 + timer_scale[1][7:5]);
+                                    timer_count[1]  <= ({16'd0, host_din[7:0]} + 24'd1) << (4 + timer_scale[1][7:5]);
+                                    // timer 1 runs only with the 0x43 bit4 enable
+                                    timer_running[1] <= |host_din[7:0] && timer_scale[1][4];
+                                    if (host_din[7:0] == 8'd0) begin
+                                        irq_pending[1] <= 1'b0;
+                                        timer_int[1] <= 1'b0;
+                                    end
                                 end
                                 8'h42: begin
                                     timer_scale[0] <= host_din[7:0];
                                     timer_period[0] <= (({19'd0, host_din[4:0]} + 24'd1) * ({16'd0, timer_preset[0]} + 24'd1)) << (4 + host_din[7:5]);
                                     timer_count[0]  <= (({19'd0, host_din[4:0]} + 24'd1) * ({16'd0, timer_preset[0]} + 24'd1)) << (4 + host_din[7:5]);
-                                    timer_running[0] <= |timer_preset[0];
+                                    timer_running[0] <= |timer_preset[0] && |host_din[4:0];
                                 end
                                 8'h43: begin
                                     timer_scale[1] <= host_din[7:0];
-                                    timer_period[1] <= (({19'd0, host_din[4:0]} + 24'd1) * ({16'd0, timer_preset[1]} + 24'd1)) << (4 + host_din[7:5]);
-                                    timer_count[1]  <= (({19'd0, host_din[4:0]} + 24'd1) * ({16'd0, timer_preset[1]} + 24'd1)) << (4 + host_din[7:5]);
-                                    timer_running[1] <= |timer_preset[1];
+                                    timer_period[1] <= ({16'd0, timer_preset[1]} + 24'd1) << (4 + host_din[7:5]);
+                                    timer_count[1]  <= ({16'd0, timer_preset[1]} + 24'd1) << (4 + host_din[7:5]);
+                                    timer_running[1] <= |timer_preset[1] && host_din[4];
+                                    // Enabling with pending already latched delivers
+                                    // the INT (hardware: latched_delivery test).
+                                    if (host_din[3] && irq_pending[0])
+                                        timer_int[0] <= 1'b1;
+                                    if (host_din[4] && irq_pending[1])
+                                        timer_int[1] <= 1'b1;
                                 end
+                                // 0x4A: voice-IRQ output gate (NOT a timer enable)
                                 8'h4A: irq_enabled <= host_din[7:0];
+                                // 0x4D: system control — stores bits 0 and 2 only;
+                                // bit 0 gates timer counting
+                                8'h4D: sys_ctl <= host_din[7:0] & 8'h05;
                                 8'h4F: osc_select <= host_din[4:0];
                                 default: ;
                             endcase
@@ -1182,28 +1312,27 @@ module ics2115
                 endcase
             end
 
-            // ── IRQV auto-clear side-effect ──
-            // Register the clear request from the combinational scan
-            irqv_clear_osc   <= irqv_clear_osc_next;
-            irqv_clear_vol   <= irqv_clear_vol_next;
-            irqv_clear_voice <= irqv_clear_voice_next;
-
-            // Apply the clear from the PREVIOUS cycle's registered values.
-            // IRQ status is tracked in sideband bitmaps so IRQV does not need
-            // a combinational scan of the RAM-backed voice state.
-            if (irqv_clear_osc || irqv_clear_vol) begin
+            // ── IRQV consume: clear the reported voice's pends, remember it ──
+            // (placed after the write-apply blocks so the clear wins the
+            //  same-cycle race against an OR-set)
+            if (irqv_consume) begin
+                last_irq_voice <= irqv_rr_voice;
+                osc_irq_pending[irqv_rr_voice] <= 1'b0;
+                vol_irq_pending[irqv_rr_voice] <= 1'b0;
                 irqv_ram_clear_pending <= 1'b1;
-                irqv_ram_clear_voice <= irqv_clear_voice;
-                irqv_ram_clear_osc <= irqv_clear_osc;
-                irqv_ram_clear_vol <= irqv_clear_vol;
+                irqv_ram_clear_voice <= irqv_rr_voice;
+                irqv_ram_clear_osc <= irqv_rr_osc;
+                irqv_ram_clear_vol <= irqv_rr_vol;
             end
-            if (irqv_clear_osc)
-                osc_irq_pending[irqv_clear_voice] <= 1'b0;
-            if (irqv_clear_vol)
-                vol_irq_pending[irqv_clear_voice] <= 1'b0;
 
-            // ── Timer IRQ auto-clear side-effect ──
-            // Register the clear request, apply one cycle later (same pattern as IRQV)
+            // Track read sequencing for the 16-bit timer ack condition.
+            if (host_rd_done_pulse && (host_addr == 2'd2 || host_addr == 2'd3)) begin
+                prev_rd_reg    <= reg_select;
+                prev_rd_was_lo <= (host_addr == 2'd2);
+            end
+
+            // ── Timer IRQ ack side-effect ──
+            // Register the clear request, apply one cycle later
             timer_irq_clear[0] <= timer_irq_clear_next[0];
             timer_irq_clear[1] <= timer_irq_clear_next[1];
 
@@ -1212,13 +1341,22 @@ module ics2115
             if (timer_irq_clear[1])
                 irq_pending[1] <= 1'b0;
 
-            // ── Timer counter logic (gated by ce) ──
-            if (ce) begin
+            // ── Timer INT latch clear (0x43 read) ──
+            if (stat43_rd_clear)
+                timer_int <= 2'b00;
+
+            // ── Timer counter logic ──
+            // Hardware (T-SYS 2026-06-13): timer counting requires 0x4D bits 0
+            // AND 2 both set (0x01 alone does not run; 0x05 does).  The BIOS
+            // post-init state 0x0D has both, so games are unaffected.
+            if (ce && sys_ctl[0] && sys_ctl[2]) begin
                 for (int t = 0; t < 2; t++) begin
                     if (timer_running[t]) begin
                         if (timer_count[t] == 24'd0) begin
-                            // Timer expired: set IRQ pending, reload
+                            // Timer expired: set pending + INT latch, reload
                             irq_pending[t] <= 1'b1;
+                            if (timer_scale[1][3 + t])
+                                timer_int[t] <= 1'b1;
                             timer_count[t] <= timer_period[t] - 24'd1;
                         end else begin
                             timer_count[t] <= timer_count[t] - 24'd1;

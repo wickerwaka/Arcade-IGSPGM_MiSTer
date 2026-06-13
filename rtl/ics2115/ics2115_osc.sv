@@ -92,12 +92,14 @@ module ics2115_osc
     logic osc_conf_ulaw;
     logic osc_conf_8bit_linear;
     logic osc_conf_16bit;
+    logic osc_conf_noise;   // fmt 11: oscillator-clocked noise generator
 
     always_comb begin
         osc_conf_8bit = 0;
         osc_conf_ulaw = 0;
         osc_conf_8bit_linear = 0;
         osc_conf_16bit = 0;
+        osc_conf_noise = 0;
 
         if (~v.osc_conf[OSC_16BIT]) begin
             osc_conf_8bit = 1;
@@ -105,46 +107,72 @@ module ics2115_osc
                 osc_conf_ulaw = 1;
             else
                 osc_conf_8bit_linear = 1;
+        end else if (v.osc_conf[OSC_ULAW]) begin
+            // fmt 11 (both format bits set): white-noise generator, not 16-bit.
+            osc_conf_noise = 1;
         end else begin
             osc_conf_16bit = 1;
         end
     end
 
+    // Free-running noise generator (T-NOISE hw RE 2026-06-13): fmt 11 outputs
+    // an 8-bit value from a free-running LFSR instead of a ROM sample,
+    // advanced at the oscillator step (one new value per integer sample-index
+    // crossing) so its pitch tracks OscFC.  Never reset on key-on -> output is
+    // uncorrelated across key-ons, matching hardware.  Polynomial is a free
+    // choice (exact hw polynomial is unrecoverable through the resampled
+    // audio path, and no PGM game uses fmt 11): 16-bit Galois, taps 0xB400.
+    logic [15:0] noise_lfsr;
+    function automatic logic [15:0] lfsr_next(input logic [15:0] s);
+        lfsr_next = s[0] ? (s >> 1) ^ 16'hB400 : (s >> 1);
+    endfunction
+    // 8-bit sample value placed like a lin8 sample.
+    wire signed [15:0] noise_sample = $signed({noise_lfsr[7:0], 8'h00});
+
+    // Volume-envelope step per sample tick (26-bit vol_acc units).
+    // Hardware rate law (T-VINCR2 dense sweep 2026-06-13, fit within ~6%):
+    //   mode 2 (linear): step = incr << 10
+    //   mode 0/1/3 (exponential): step = 2^(E/32), 32 sub-steps per octave,
+    //     E = incr + (mode==0 ? 0 : 256).  vmode bit1 is phase/no-op (1==3).
+    //   Realized as a 32-entry mantissa LUT (round(1024*2^(frac/32))) barrel-
+    //   shifted by the octave: step = (mant[E&31] << (E>>5)) >> 10.
     function automatic logic [25:0] calc_vol_step(
         input logic [1:0] mode,
         input logic [7:0] incr
     );
-        logic [5:0] mant;
+        logic [8:0]  e;
+        logic [3:0]  octave;
+        logic [4:0]  frac;
+        logic [10:0] mant;
+        logic [25:0] expstep;
         begin
-            mant = {1'b1, incr[4:0]};
-            calc_vol_step = 26'd0;
-
-            case (mode)
-                // Very slow mode.  Long hardware captures show no movement for
-                // incr <= 223 and period ~= 4177920 / (incr - 192) for 224..255.
-                2'b00: begin
-                    if (incr[7:5] == 3'b111)
-                        calc_vol_step = {16'd0, mant, 4'd0};       // mant * 16
-                end
-
-                // Compact/floating-style modes.  Only VMode[1:0] is considered
-                // significant; modes 1 and 3 share the same measured rate.
-                2'b01, 2'b11: begin
-                    if (incr != 8'd0) begin
-                        case (incr[6:5])
-                            2'd0: calc_vol_step = {13'd0, mant, 7'd0};  // mant * 128
-                            2'd1: calc_vol_step = {12'd0, mant, 8'd0};  // mant * 256
-                            2'd2: calc_vol_step = {11'd0, mant, 9'd0};  // mant * 512
-                            2'd3: calc_vol_step = {10'd0, mant, 10'd0}; // mant * 1024
-                        endcase
-                    end
-                end
-
-                // Linear mode: period ~= 65280 / incr.
-                2'b10: begin
-                    calc_vol_step = {8'd0, incr, 10'd0};          // incr * 1024
-                end
+            e = (mode == 2'b00) ? {1'b0, incr} : ({1'b0, incr} + 9'd256);
+            octave = e[8:5];
+            frac   = e[4:0];
+            case (frac)  // round(1024 * 2^(frac/32))
+                5'd0:  mant = 11'd1024; 5'd1:  mant = 11'd1046;
+                5'd2:  mant = 11'd1069; 5'd3:  mant = 11'd1093;
+                5'd4:  mant = 11'd1117; 5'd5:  mant = 11'd1141;
+                5'd6:  mant = 11'd1166; 5'd7:  mant = 11'd1192;
+                5'd8:  mant = 11'd1218; 5'd9:  mant = 11'd1244;
+                5'd10: mant = 11'd1272; 5'd11: mant = 11'd1300;
+                5'd12: mant = 11'd1328; 5'd13: mant = 11'd1357;
+                5'd14: mant = 11'd1387; 5'd15: mant = 11'd1417;
+                5'd16: mant = 11'd1448; 5'd17: mant = 11'd1480;
+                5'd18: mant = 11'd1512; 5'd19: mant = 11'd1545;
+                5'd20: mant = 11'd1579; 5'd21: mant = 11'd1614;
+                5'd22: mant = 11'd1649; 5'd23: mant = 11'd1685;
+                5'd24: mant = 11'd1722; 5'd25: mant = 11'd1760;
+                5'd26: mant = 11'd1798; 5'd27: mant = 11'd1838;
+                5'd28: mant = 11'd1878; 5'd29: mant = 11'd1919;
+                5'd30: mant = 11'd1961; 5'd31: mant = 11'd2004;
             endcase
+            expstep = ({15'd0, mant} << octave) >> 10;
+
+            if (mode == 2'b10)
+                calc_vol_step = {8'd0, incr, 10'd0};   // linear
+            else
+                calc_vol_step = expstep;               // 0,1,3 exponential
         end
     endfunction
 
@@ -264,6 +292,7 @@ module ics2115_osc
             vright        <= 16'd0;
             sample1       <= 16'sd0;
             sample2       <= 16'sd0;
+            noise_lfsr    <= 16'hACE1;   // nonzero seed (free-running; key-on does not reset)
             interp_sample <= 16'sd0;
             audio_left    <= 24'sd0;
             audio_right   <= 24'sd0;
@@ -390,7 +419,9 @@ module ics2115_osc
                         vright <= 16'd0;
 
                     // Decode sample1 from ROM data
-                    if (osc_conf_ulaw) begin
+                    if (osc_conf_noise) begin
+                        sample1 <= noise_sample;       // fmt 11: generator, ROM ignored
+                    end else if (osc_conf_ulaw) begin
                         if (~cur_addr[0])
                             sample1 <= ulaw_decode(rom_data[15:8]);
                         else
@@ -404,8 +435,13 @@ module ics2115_osc
                         else
                             sample1 <= $signed({ rom_data[7:0],  8'h00 });
                     end else begin
-                        // 16-bit: ROM word is the sample (word-aligned assumption)
-                        sample1 <= $signed(rom_data);
+                        // 16-bit mode on PGM: the board wires the 8-bit music
+                        // ROM bus so the addressed byte appears REPEATED in
+                        // both lanes of the 16-bit sample.
+                        if (~cur_addr[0])
+                            sample1 <= $signed({ rom_data[15:8], rom_data[15:8] });
+                        else
+                            sample1 <= $signed({ rom_data[7:0], rom_data[7:0] });
                     end
 
                     // Issue ROM read for sample2
@@ -417,7 +453,9 @@ module ics2115_osc
                 // SAMPLE_WAIT: ROM data for sample2 arrived. Latch sample2.
                 // ─────────────────────────────────────────────────────────────
                 ST_SAMPLE_WAIT: begin
-                    if (osc_conf_ulaw) begin
+                    if (osc_conf_noise) begin
+                        sample2 <= noise_sample;       // same generator value (no interp)
+                    end else if (osc_conf_ulaw) begin
                         if (~next_addr[0])
                             sample2 <= ulaw_decode(rom_data[15:8]);
                         else
@@ -429,7 +467,10 @@ module ics2115_osc
                         else
                             sample2 <= $signed({ rom_data[7:0],  8'h00 });
                     end else begin
-                        sample2 <= $signed(rom_data);
+                        if (~next_addr[0])
+                            sample2 <= $signed({ rom_data[15:8], rom_data[15:8] });
+                        else
+                            sample2 <= $signed({ rom_data[7:0], rom_data[7:0] });
                     end
                 end
 
@@ -472,6 +513,17 @@ module ics2115_osc
                             osc_left = $signed({1'b0, v.osc_end}) - $signed({1'b0, next_osc});
                         end
 
+                        // Noise generator advances one LFSR step each time the
+                        // oscillator crosses to a new integer sample index, so
+                        // the noise rate tracks OscFC (held value at low fc,
+                        // full white near fc=1.0).  Free-running: never reset.
+                        // Sample index granularity is acc>>12 (MAME: saddr<<20
+                        // | acc>>12), so step on bit-12 crossings to match the
+                        // measured OscFC noise rate.
+                        if (osc_conf_noise &&
+                            (next_osc[28:12] != v.osc_acc[28:12]))
+                            noise_lfsr <= lfsr_next(noise_lfsr);
+
                         if (osc_left >= 28'sd0) begin
                             v.osc_acc <= next_osc;
                         end else begin
@@ -513,9 +565,14 @@ module ics2115_osc
                     logic signed [26:0] vol_left;
                     logic [25:0] next_vol;
 
-                    // Skip envelope if done, stopped, or the selected VMode/VIncr
-                    // combination produces no measured accumulator movement.
-                    if (!(v.vol_ctrl[VOL_DONE] || v.vol_ctrl[VOL_STOP] || (vol_step == 26'd0))) begin
+                    // Skip envelope only when done or stopped.  A zero step
+                    // (VIncr/VMode with no movement) must STILL evaluate the
+                    // boundary: the BIOS voice teardown collapses the window
+                    // (VolStart=VolEnd=1) and polls VCtl until DONE sets —
+                    // hardware completes that instantly even with vincr=0.
+                    // With step 0 inside a valid window, vol_left >= 0 and
+                    // nothing changes (static volume stays safe).
+                    if (!(v.vol_ctrl[VOL_DONE] || v.vol_ctrl[VOL_STOP])) begin
                         // Update accumulator by the per-voice VMode/VIncr step.
                         if (v.vol_ctrl[VOL_INVERT]) begin
                             next_vol = v.vol_acc - vol_step;
@@ -530,6 +587,13 @@ module ics2115_osc
                             v.vol_acc <= next_vol;
                         end else begin
                             // Boundary crossed or exactly reached
+
+                            // The engine clears the rollover flag at the
+                            // boundary: the BIOS voice-teardown collapses the
+                            // ramp (VolStart=VolEnd) and polls VCtl bit2
+                            // until clear — with a stored-byte readback this
+                            // is the only thing that terminates that poll.
+                            v.vol_ctrl[VOL_ROLLOVER] <= 1'b0;
 
                             // Fire IRQ if enabled
                             if (v.vol_ctrl[VOL_IRQ]) begin
