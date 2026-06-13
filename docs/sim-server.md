@@ -689,26 +689,6 @@ Result:
 {"path":"frame.png"}
 ```
 
-### `video.set_hscale`
-
-Control the horizontal scaler (`video_hscale`) instantiated in `sim_top`. When enabled, the video output runs at one pixel per 50MHz clock (CE always high) and the active line width becomes `448 * (80 + scale) / 80` native-pixel widths, i.e. `28 * (80 + scale)` output pixels. The screenshot framebuffer is re-initialised 2688 pixels wide while enabled (448 when disabled), so capture at least one full frame after changing it. Parameters latch inside the scaler at the next vblank.
-
-- `enabled` (bool, required)
-- `scale` (int, -16..15, default 0): width scale `k`, 1.25% per step (-16 = 80%, 0 = 100%, +15 = 118.75%)
-- `offset` (int, -16..15, default 0): hsync position adjust in native pixels (5 output clocks each)
-
-Request:
-
-```json
-{"id":21,"method":"video.set_hscale","params":{"enabled":true,"scale":-16,"offset":0}}
-```
-
-Result:
-
-```json
-{}
-```
-
 ## ICS2115 debug state
 
 ### `ics2115.get_state`

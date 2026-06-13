@@ -270,7 +270,6 @@ class SimController
     ControllerResult<EmptyResult> SetDipSwitch(uint8_t switchIndex, bool enabled);
     ControllerResult<EmptyResult> SetDipSwitches(uint8_t value);
     uint8_t GetDipSwitches() const;
-    ControllerResult<EmptyResult> SetHScale(bool enabled, int scale, int offset);
     ControllerResult<InputStateResult> GetInputState() const;
     ControllerResult<EmptyResult> SetInput(const std::string &name, bool pressed);
     ControllerResult<EmptyResult> ClearInput(const std::string &name);

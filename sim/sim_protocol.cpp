@@ -203,17 +203,8 @@ class JsonParser
         }
         if (c == '-')
         {
-            mPos++;
-            uint64_t numberValue = 0;
-            if (!ParseNumber(numberValue))
-                return false;
-            if (numberValue > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-            {
-                mError = "Number out of range";
-                return false;
-            }
-            value = JsonValue::SignedNumber(-static_cast<int64_t>(numberValue));
-            return true;
+            mError = "Negative numbers are not supported in this protocol";
+            return false;
         }
 
         mError = "Invalid JSON value";
@@ -482,23 +473,12 @@ std::string SerializeJson(const JsonValue &value)
 
 bool RequireNumber(const JsonValue &value, const std::string &name, uint64_t &out, std::string &error)
 {
-    if (!value.IsNumber() || value.mNumberSigned)
-    {
-        error = "Expected non-negative numeric field: " + name;
-        return false;
-    }
-    out = value.mNumber;
-    return true;
-}
-
-bool RequireSignedNumber(const JsonValue &value, const std::string &name, int64_t &out, std::string &error)
-{
     if (!value.IsNumber())
     {
         error = "Expected numeric field: " + name;
         return false;
     }
-    out = value.mNumberSigned ? value.mSignedNumber : static_cast<int64_t>(value.mNumber);
+    out = value.mNumber;
     return true;
 }
 
@@ -1316,29 +1296,6 @@ std::string SimProtocol::HandleLine(const std::string &line)
 
         auto result = mController.SetDipSwitch(static_cast<uint8_t>(switchIndex), enabled);
         return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({{"value", JsonValue::Number(mController.GetDipSwitches())}})));
-    }
-    if (method == "video.set_hscale")
-    {
-        bool enabled = false;
-        if (!RequireObjectField(params, "enabled", field, error) || !RequireBool(*field, "enabled", enabled, error))
-            return SerializeJson(MakeErrorResponse(id, "bad_request", error));
-
-        int64_t scale = 0;
-        if (const JsonValue *scaleField = FindObjectField(params, "scale"))
-        {
-            if (!RequireSignedNumber(*scaleField, "scale", scale, error))
-                return SerializeJson(MakeErrorResponse(id, "bad_request", error));
-        }
-
-        int64_t offset = 0;
-        if (const JsonValue *offsetField = FindObjectField(params, "offset"))
-        {
-            if (!RequireSignedNumber(*offsetField, "offset", offset, error))
-                return SerializeJson(MakeErrorResponse(id, "bad_request", error));
-        }
-
-        auto result = mController.SetHScale(enabled, static_cast<int>(scale), static_cast<int>(offset));
-        return SerializeJson(WrapControllerResult(id, result, JsonValue::Object({})));
     }
     if (method == "input.get_state")
     {

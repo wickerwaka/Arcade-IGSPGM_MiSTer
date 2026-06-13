@@ -27,7 +27,7 @@ class SimVideo : public Window
     {
         mWidth = w;
         mHeight = h;
-        mPixels = new uint32_t[mWidth * mHeight]();
+        mPixels = new uint32_t[mWidth * mHeight];
         if (renderer)
         {
             mTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, mWidth, mHeight);
@@ -55,11 +55,15 @@ class SimVideo : public Window
         mTexture = nullptr;
     }
 
-    // Called once per system clock; ce may stay high every cycle (one pixel
-    // per call) when the horizontal scaler outputs at the full clock rate.
     void Clock(bool ce, bool hsync, bool vsync, uint8_t r, uint8_t g, uint8_t b)
     {
         if (!ce)
+        {
+            mInCe = false;
+            return;
+        }
+
+        if (mInCe)
             return;
 
         if (hsync)
@@ -78,6 +82,7 @@ class SimVideo : public Window
 
         mInHsync = hsync;
         mInVsync = vsync;
+        mInCe = ce;
 
         if (!hsync && !vsync)
         {
