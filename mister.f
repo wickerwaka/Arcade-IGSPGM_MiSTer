@@ -60,6 +60,7 @@ rtl/ddram.sv
 rtl/rom_loader.sv
 rtl/audio_mix.sv
 rtl/video_path.sv
+rtl/video_hscale.sv
 rtl/rom_cache.sv
 rtl/mame_keys.sv
 rtl/coin_pulse.sv

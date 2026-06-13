@@ -209,6 +209,9 @@ localparam CONF_STR = {
     "P1O[19],Consumer CRT Sync,On,Off;",
     "P1O[13:9],Analog Video H-Pos,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
     "P1O[18:14],Analog Video V-Pos,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,-15,-14,-13,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
+    "P1-;",
+    "P1O[20],H-Scaler (Analog Out),Off,On;",
+    "P1O[25:21],H-Scale,100%,101.25%,102.5%,103.75%,105%,106.25%,107.5%,108.75%,110%,111.25%,112.5%,113.75%,115%,116.25%,117.5%,118.75%,80%,81.25%,82.5%,83.75%,85%,86.25%,87.5%,88.75%,90%,91.25%,92.5%,93.75%,95%,96.25%,97.5%,98.75%;",
     "-;",
     "O[38],OSD Pause,No,Yes;",
     "O[39],Pause Dim,Yes,No;",
@@ -772,6 +775,8 @@ wire [1:0] scale          = status[7:6];
 wire       rotate         = status[8];
 wire [4:0] hoffset        = status[13:9];
 wire [4:0] voffset        = status[18:14];
+wire       hscale_en      = status[20];
+wire [4:0] hscale         = status[25:21];
 
 wire       osd_pause      = status[38];
 wire       pause_dim      = ~status[39];
@@ -806,6 +811,7 @@ video_path video_path(
     .CLK_VIDEO,
 
     .hoffset, .voffset,
+    .hscale_en, .hscale,
 
     .forced_scandoubler, .scandoubler_fx,
     .ar, .scale,
