@@ -326,10 +326,20 @@ module ics2115
         SEQ_START        = 4'd4,
         SEQ_WAIT         = 4'd5,
         SEQ_STORE        = 4'd6,
-        SEQ_OUTPUT       = 4'd7
+        SEQ_OUTPUT       = 4'd7,
+        SEQ_START_DELAY  = 4'd8
     } seq_state_t;
 
     seq_state_t seq_state;
+    // Cycles to wait in SEQ_START_DELAY before loading each voice, so an
+    // in-flight host voice-RAM write to that voice commits first.  A host RMW
+    // commits 3 cycles after its pop, and the latest a write to voice V can be
+    // popped is the cycle the sequencer leaves voice V-1 (V is not yet the
+    // current voice, so the guard allows it).  Two delay cycles push the
+    // sequencer's voice-V read (LOAD_WAIT) past that commit and keep the host's
+    // port-B access and the sequencer's port-A access on different cycles.
+    localparam int SEQ_START_DELAY_CYCLES = 2;
+    logic [1:0] seq_start_cnt;
     logic [4:0] seq_voice_idx;
     logic [4:0] seq_voice_rd_addr;
 
@@ -424,6 +434,7 @@ module ics2115
             seq_voice_wr  <= 1'b0;
             seq_wr_idx    <= 5'd0;
             seq_wr_data   <= '0;
+            seq_start_cnt <= 2'd0;
             for (int i = 0; i < NUM_VOICES; i++) begin
                 debug_voice_sample_left[i] <= 24'sd0;
                 debug_voice_sample_right[i] <= 24'sd0;
@@ -455,11 +466,21 @@ module ics2115
                 SEQ_IDLE: begin
                     if (sample_tick) begin
                         seq_voice_idx <= 5'd0;
-                        seq_voice_rd_addr <= 5'd0;
                         acc_left      <= 24'sd0;
                         acc_right     <= 24'sd0;
-                        seq_state     <= SEQ_LOAD_ADDR;
+                        // Delay before loading voice 0 (see SEQ_START_DELAY).
+                        seq_start_cnt <= 2'(SEQ_START_DELAY_CYCLES - 1);
+                        seq_state     <= SEQ_START_DELAY;
                     end
+                end
+
+                // Wait a couple of cycles before loading the upcoming voice so an
+                // in-flight host write to it commits first.
+                SEQ_START_DELAY: begin
+                    if (seq_start_cnt == 2'd0)
+                        seq_state <= SEQ_LOAD_ADDR;
+                    else
+                        seq_start_cnt <= seq_start_cnt - 2'd1;
                 end
 
                 SEQ_LOAD_ADDR: begin
@@ -504,8 +525,8 @@ module ics2115
                         seq_state <= SEQ_OUTPUT;
                     end else begin
                         seq_voice_idx <= seq_voice_idx + 5'd1;
-                        seq_voice_rd_addr <= seq_voice_idx + 5'd1;
-                        seq_state     <= SEQ_LOAD_ADDR;
+                        seq_start_cnt <= 2'(SEQ_START_DELAY_CYCLES - 1);
+                        seq_state     <= SEQ_START_DELAY;
                     end
                 end
 
@@ -913,8 +934,8 @@ module ics2115
 
     wire [4:0] host_next_voice = irqv_ram_clear_pending ? irqv_ram_clear_voice :
                                   (host_fifo_empty ? host_voice_wr_voice : host_fifo_voice[host_fifo_head]);
-    wire host_voice_wr_busy = (seq_state != SEQ_IDLE && seq_state != SEQ_OUTPUT)
-                           && (host_next_voice == seq_voice_idx);
+    wire seq_active = (seq_state != SEQ_IDLE) && (seq_state != SEQ_OUTPUT);
+    wire host_voice_wr_busy = seq_active && (host_next_voice == seq_voice_idx);
     wire host_fifo_pop_now = (host_state == HOST_IDLE) && !irqv_ram_clear_pending && !host_fifo_empty && !host_voice_wr_busy;
 
     always_comb begin
