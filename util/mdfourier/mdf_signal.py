@@ -70,7 +70,7 @@ MDF_MAX_ENTRIES = 256          # must match Z80_ICS_MDF_MAX_ENTRIES
 # MDFourier detects pulseCount tone pulses (each pulseFrameLen frames) with
 # silence gaps of the same length.  8820 Hz is the canonical sync frequency.
 SYNC_FREQ = 8820
-SYNC_PULSE_FRAMES = 10         # pulseFrameLen
+SYNC_PULSE_FRAMES = 1         # pulseFrameLen
 SYNC_PULSE_COUNT = 10          # pulseCount
 
 # ── Tone sweep ──────────────────────────────────────────────────────────────
@@ -192,8 +192,9 @@ def build_blocks() -> List[Block]:
         _sync_block("Sync", 0),
         _silence_block("Silence", 0),
         _tone_block(),
+        _silence_block("Silence", 0),
         _pan_block(),
-        _silence_block("Silence", 1),
+        _silence_block("Silence", 0),
         _sync_block("Sync", 0),
     ]
 
