@@ -278,6 +278,7 @@ reg [7:0] draw_line;
 arom_offset_t pixel0_offset, pixel1_offset;
 wire buffer_ready;
 reg draw_complete;
+reg spr_load_d;
 reg [15:0] initial_addr_low;
 
 // tmp_* are temporary
@@ -300,6 +301,7 @@ always_ff @(posedge clk) begin
     end else begin
         pixel0_wr <= 0;
         pixel1_wr <= 0;
+        spr_load_d <= 0;
 
         if (spr_x_flip ^ spr_y_flip) begin
             pixel_column <= (spr_x + spr_scaled_width[10:0]) - (pixel_next + 2);  // TODO - truncating spr_scaled_width
@@ -317,12 +319,13 @@ always_ff @(posedge clk) begin
             {spr_width, spr_height} <= sprite_d4[sprite_index][14:0];
 
             spr <= sprite_state[sprite_index];
-            spr_saved <= sprite_state[sprite_index];           
+            spr_saved <= sprite_state[sprite_index];
+            spr_load_d <= 1;           
         end else if (spr_store) begin
             sprite_state[sprite_index] <= spr;
         end
 
-        begin
+        if (spr_load_d) begin
             // this stuff happens the next cycle after spr_load
             if (spr_y_flip) begin
                 spr_brom_base_addr <= spr_brom_addr + 32'd3 + ({17'b0, spr_width} * {14'b0, spr_height});
@@ -455,7 +458,10 @@ always_ff @(posedge clk) begin
             end
 
             PRESCAN_SCAN_TO_START: begin
-                if (~spr.screen_line[9]) begin // if y position is no long negative we are good
+                if (spr_height == 0) begin
+                    dma_state <= PRESCAN_NEXT;
+                    spr.active <= 0;
+                end else  if (~spr.screen_line[9]) begin // if y position is no long negative we are good
                     dma_state <= PRESCAN_NEXT;
                 end else if (tmp_x == spr_width) begin
                     if (spr.source_line == spr_y_end) begin
