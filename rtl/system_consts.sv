@@ -14,7 +14,7 @@ package system_consts;
     parameter int SSIDX_IGS022_RAM_LO = 12;   // shared protection RAM, low bytes
     parameter int SSIDX_IGS022_RAM_HI = 13;   // shared protection RAM, high bytes
     parameter int SSIDX_IGS027A       = 14;   // ARM7 core (64 words) + igs027a wrapper regs
-    parameter int SSIDX_IGS027A_IRAM  = 15;   // internal RAM (64KB) via ram_cache rd/wr ports
+    parameter int SSIDX_IGS027A_IRAM  = 15;   // internal RAM (up to 256KB) via ram_cache rd/wr ports
     parameter int SSIDX_IGS027A_SHARE = 16;   // 68k/ARM shared RAM (64KB)
     parameter int SSIDX_IGS027A_XOR   = 17;   // exrom XOR table (1KB)
 
@@ -24,7 +24,7 @@ package system_consts;
     parameter bit [31:0] DOWNLOAD_DDR_BASE   = 32'h3000_0000;
     parameter bit [31:0] CART_ARM_ROM_DDR_BASE = 32'h3C00_0000;
     parameter bit [31:0] PROT_INT_ROM_DDR_BASE = 32'h3C90_0000; // igs027a 16KB internal ROM
-    parameter bit [31:0] PROT_IRAM_DDR_BASE    = 32'h3CA0_0000; // igs027a 64KB internal RAM (P2)
+    parameter bit [31:0] PROT_IRAM_DDR_BASE    = 32'h3CA0_0000; // igs027a internal RAM, up to 256KB (P2)
     parameter bit [31:0] PROT_ROM_DDR_BASE     = 32'h3CB0_0000; // igs022 64KB private data ROM
     // IGS027A 68k/ARM shared RAM, two 64KB "chips" (was 128KB block RAM).  chip0
     // @ base, chip1 @ base+0x10000.  Fronted by one ram_cache per chip.

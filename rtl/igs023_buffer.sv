@@ -30,7 +30,7 @@ module IGS023_Buffer(
     input             arom_ack
 );
 
-localparam int NUM_LINE_BUFFERS = 8'd16;
+localparam int NUM_LINE_BUFFERS = 8'd32;
 localparam int LINE_BUF_BITS = $clog2(NUM_LINE_BUFFERS);
 
 initial begin

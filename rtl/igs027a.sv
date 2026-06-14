@@ -323,9 +323,9 @@ module igs027a #(
     typedef enum logic [1:0] { SI_IDLE, SI_RD, SI_WR, SI_WAIT } si_t;
     si_t         si_state;
     logic        ss_iram_rd, ss_iram_wr;
-    logic [13:0] ss_iram_word;
+    logic [15:0] ss_iram_word;   // 16-bit word index: full 256KB iram (65536 words)
     wire         ss_iram_own  = arm_frozen;
-    wire [31:0]  ss_iram_addr = PROT_IRAM_DDR_BASE + {16'd0, ss_iram_word, 2'b00};
+    wire [31:0]  ss_iram_addr = PROT_IRAM_DDR_BASE + {14'd0, ss_iram_word, 2'b00};
 
     // type3 has two distinct internal RAMs: arm_ram (0x18000000, 256KB) and
     // arm_ram2 (0x10000000, 1KB).  Map to non-overlapping windows in the iram
@@ -360,7 +360,7 @@ module igs027a #(
     );
 
     always_ff @(posedge clk) begin
-        ssbus_iram.setup(SS_IDX_IRAM, 32'd16384, 2);
+        ssbus_iram.setup(SS_IDX_IRAM, 32'd65536, 2);   // 65536 words * 4B = 256KB (always full size)
         if (reset) begin
             si_state   <= SI_IDLE;
             ss_iram_rd <= 1'b0;
@@ -371,7 +371,7 @@ module igs027a #(
                     ss_iram_rd <= 1'b0;
                     ss_iram_wr <= 1'b0;
                     if (arm_frozen && ssbus_iram.access(SS_IDX_IRAM)) begin
-                        ss_iram_word <= ssbus_iram.addr[13:0];
+                        ss_iram_word <= ssbus_iram.addr[15:0];
                         if (ssbus_iram.write)      begin ss_iram_wr <= 1'b1; si_state <= SI_WR; end
                         else if (ssbus_iram.read)  begin ss_iram_rd <= 1'b1; si_state <= SI_RD; end
                     end
