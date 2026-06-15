@@ -279,6 +279,24 @@ static void handle_mdf_status(u8 seq)
     send_response(seq, ICS_REMOTE_STATUS_OK, out, sizeof(out));
 }
 
+static void handle_stress_reg(u8 seq, const u8 *payload, u8 len)
+{
+    u16 mismatches = 0;
+    u8 out[2];
+    if (len != 4)
+    {
+        send_response(seq, ICS_REMOTE_STATUS_BAD_LENGTH, NULL, 0);
+        return;
+    }
+    if (!z80_ics_stress_reg(payload[0], payload[1], ((u16)payload[2] << 8) | payload[3], &mismatches))
+    {
+        send_ics_error(seq);
+        return;
+    }
+    put_be16(out, mismatches);
+    send_response(seq, ICS_REMOTE_STATUS_OK, out, sizeof(out));
+}
+
 static void handle_request(const u8 *req)
 {
     u8 seq = req[3];
@@ -354,6 +372,9 @@ static void handle_request(const u8 *req)
         break;
     case ICS_REMOTE_CMD_MDF_STATUS:
         if (len == 0) handle_mdf_status(seq); else send_response(seq, ICS_REMOTE_STATUS_BAD_LENGTH, NULL, 0);
+        break;
+    case ICS_REMOTE_CMD_STRESS_REG:
+        handle_stress_reg(seq, payload, len);
         break;
     default:
         send_response(seq, ICS_REMOTE_STATUS_BAD_CMD, NULL, 0);

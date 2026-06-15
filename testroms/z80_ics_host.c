@@ -444,6 +444,19 @@ bool z80_ics_mdf_status(u8 *running, u16 *index)
     return true;
 }
 
+bool z80_ics_stress_reg(u8 voice, u8 reg, u16 iters, u16 *mismatches)
+{
+    if (!command_simple(Z80_ICS_CMD_STRESS_REG, voice, reg, 0, iters, NULL))
+        return false;
+    if (mismatches)
+    {
+        z80_bus_take();
+        *mismatches = shared_read16(Z80_ICS_OFF_RESULT);
+        z80_bus_release();
+    }
+    return true;
+}
+
 void set_osc_acc(z80_ics_voice_t *voice, u32 addr)
 {
     voice->osc_acc_hi = (addr >> 4) & 0xffff;

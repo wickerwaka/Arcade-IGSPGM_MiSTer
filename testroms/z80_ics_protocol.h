@@ -59,15 +59,26 @@ typedef signed long s32;
 #define Z80_ICS_CMD_MDF_STATUS       0x42
 
 /* One script step applied to voice 0 on its hold boundary.
- *   fc     : OscFC (reg 0x01) — sets the looped-sample repeat pitch
- *   pan    : Pan   (reg 0x0c, upper8)
- *   action : Z80_ICS_MDF_ACT_*  (key the oscillator on or off)
- *   ticks  : timer-0 IRQs to hold this step (1 tick == 1 MDFourier frame) */
-#define Z80_ICS_MDF_ACT_OFF   0    /* osc_ctl = 0x0f -> output forced to silence */
-#define Z80_ICS_MDF_ACT_ON    1    /* osc_ctl = 0x00 -> looped sample plays      */
+ *   fc       : OscFC (reg 0x01) — sets the looped-sample repeat pitch
+ *   pan      : Pan   (reg 0x0c, upper8)
+ *   osc_conf : OscConf (reg 0x00, upper8) — voice format; lets a block switch
+ *              to fmt=3 (oscillator-clocked LFSR noise)
+ *   action   : Z80_ICS_MDF_ACT_*  (key the oscillator on or off)
+ *   ticks    : timer-0 IRQs to hold this step (1 tick == 1 MDFourier frame) */
+#define Z80_ICS_MDF_ACT_OFF      0 /* osc_ctl = 0x0f -> output forced to silence  */
+#define Z80_ICS_MDF_ACT_ON       1 /* key on at full volume (sharp, e.g. sync)    */
+#define Z80_ICS_MDF_ACT_ON_RAMP  2 /* key on with a short volume ramp (de-popped) */
 
-#define Z80_ICS_MDF_ENTRY_SIZE 6   /* fc_hi fc_lo pan action ticks_hi ticks_lo */
+/* 8 bytes: fc_hi fc_lo pan osc_conf action reserved ticks_hi ticks_lo */
+#define Z80_ICS_MDF_ENTRY_SIZE 8
 #define Z80_ICS_MDF_MAX_ENTRIES 256
+
+/* OscAcc race repro: with master-run on (so the sequencer walks all voices),
+ * write `voice`/`reg` (16-bit) for `value` iterations alternating 0xAAAA/0x5555
+ * and read it back each time; result = count of reads that did not match the
+ * just-written value (host register write clobbered by the sequencer's
+ * whole-voice write-back).  reg 0 defaults to 0x0a (OscAcc high). */
+#define Z80_ICS_CMD_STRESS_REG       0x43
 
 #define Z80_ICS_WIDTH_16       0
 #define Z80_ICS_WIDTH_UPPER8   1

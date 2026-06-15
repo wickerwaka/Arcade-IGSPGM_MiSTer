@@ -22,7 +22,9 @@ ROM therefore repeats at::
 
 so pitch is proportional to osc_fc and one semitone is a factor of 2**(1/12).
 A fixed loop with varying osc_fc keeps a constant timbre; the per-tick
-sequencer only rewrites osc_fc (0x01), pan (0x0c) and osc_ctl (0x10).
+sequencer rewrites osc_conf (0x00), osc_fc (0x01), pan (0x0c) and osc_ctl
+(0x10).  The noise block reuses the tone-sweep osc_fc values but sets
+osc_conf to fmt=3 (oscillator-clocked LFSR), so its bandwidth tracks osc_fc.
 """
 
 from __future__ import annotations
@@ -40,14 +42,14 @@ NYQUIST = SAMPLE_RATE / 2.0
 
 # ── Timer 0 frame tick ──────────────────────────────────────────────────────
 # period_clocks = ((scale[4:0]+1) * (preset+1)) << (4 + scale[7:5])    (RTL)
-# scale0 = 0x3F -> mult 32, shift 1 ; preset0 = 0x89 (137) -> (137+1)=138
-# period = (32 * 138) << 5 = 141312 ICS clocks = 138 output samples exactly.
-TIMER_SCALE0 = 0x3F
+# scale0 = 0x7F -> mult 32, shift 3 ; preset0 = 0x89 (137) -> (137+1)=138
+# period = (32 * 138) << 7 = 565248 ICS clocks = 552 output samples exactly.
+TIMER_SCALE0 = 0x7F
 TIMER_PRESET0 = 0x89
 TIMER_PERIOD_CLOCKS = (((TIMER_SCALE0 & 0x1F) + 1) * (TIMER_PRESET0 + 1)) << (4 + (TIMER_SCALE0 >> 5))
-SAMPLES_PER_FRAME = TIMER_PERIOD_CLOCKS / OUTPUT_DIV         # 138.0
-FRAME_MS = TIMER_PERIOD_CLOCKS / ICS_CLK * 1000.0           # ~4.1726 ms
-FRAME_RATE = ICS_CLK / TIMER_PERIOD_CLOCKS                  # ~239.67 Hz
+SAMPLES_PER_FRAME = TIMER_PERIOD_CLOCKS / OUTPUT_DIV         # 522.0
+FRAME_MS = TIMER_PERIOD_CLOCKS / ICS_CLK * 1000.0           # ~16.6893
+FRAME_RATE = ICS_CLK / TIMER_PERIOD_CLOCKS                  # ~59.918 Hz
 
 # ── Looped BIOS sample region (validated music-ROM sample area) ──────────────
 # A short sub-loop inside 0x2D640..0x3B2A0 so its repeat rate is the pitch.
@@ -55,14 +57,27 @@ LOOP_START = 0x2D640
 LOOP_LEN = 64                  # bytes (8-bit linear samples)
 LOOP_END = LOOP_START + LOOP_LEN
 
-# ── Voice template (fixed parts; fc/pan/osc_ctl come from the script) ────────
-OSC_CONF = 0x08                # loop, linear-8, no IRQ
+# ── Voice template (fixed parts; fc/pan/osc_ctl/osc_conf come from the script) ─
+OSC_CONF = 0x08                # loop, linear-8, no IRQ (tone/sync/pan)
+NOISE_CONF = 0x0B              # loop + format 11 = fmt=3 oscillator-clocked LFSR
 OSC_SADDR = 0x40
 PAN_CENTER = 0x80
 
 # ── Sequencer entry actions (mirror z80_ics_protocol.h) ─────────────────────
-ACT_OFF = 0
-ACT_ON = 1
+ACT_OFF = 0          # silence (osc stopped)
+ACT_ON = 1           # key on at full volume — sharp edge (sync pulses)
+ACT_ON_RAMP = 2      # key on with a short volume ramp — de-popped (tone/pan/noise)
+
+# Volume-envelope attack ramp (applied at key-on for ACT_ON_RAMP).  The voice
+# template sets the rate (vol_incr) / mode (vmode) / window (vol_start..vol_end);
+# the sequencer just starts vol_acc at 0.  vmode=2 is the LINEAR rate law
+# (step = vol_incr << 10 per sample; modes 0/1/3 are exponential — see
+# rtl/ics2115/ics2115_osc.sv calc_vol_step).  Linear, vol_incr=0xff ramps
+# vol_acc 0 -> full (vol_end<<18) in (0xff<<18)/(0xff<<10) = 256 output samples
+# (~7.7 ms) — well under one element and skipped by the block cutFrames, so it
+# kills the click without coloring the analyzed steady state.
+RAMP_INCR = 0xFF
+RAMP_VMODE = 0x02              # 2 = linear envelope
 
 MDF_MAX_ENTRIES = 256          # must match Z80_ICS_MDF_MAX_ENTRIES
 
@@ -138,10 +153,13 @@ class Entry:
     pan: int
     action: int
     ticks: int
+    osc_conf: int = OSC_CONF        # voice format (lets a block switch to fmt=3)
 
     def pack(self) -> bytes:
-        return struct.pack(">HBBH", self.fc & 0xFFFF, self.pan & 0xFF,
-                           self.action & 0xFF, self.ticks & 0xFFFF)
+        # 8 bytes: fc(u16) pan osc_conf action reserved ticks(u16)
+        return struct.pack(">HBBBBH", self.fc & 0xFFFF, self.pan & 0xFF,
+                           self.osc_conf & 0xFF, self.action & 0xFF,
+                           0, self.ticks & 0xFFFF)
 
 
 @dataclasses.dataclass
@@ -176,14 +194,24 @@ def _silence_block(name: str, cut: int) -> Block:
 
 
 def _tone_block() -> Block:
-    entries = [Entry(fc_for_freq(f), PAN_CENTER, ACT_ON, TONE_FRAMES) for f in tone_freqs()]
-    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES, 0, "green", "m", entries)
+    entries = [Entry(fc_for_freq(f), PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES) for f in tone_freqs()]
+    # cut 1 frame so the ~0.5-frame attack ramp is skipped by the analyzer.
+    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES, 1, "green", "m", entries)
 
 
 def _pan_block() -> Block:
     fc = fc_for_freq(PAN_FREQ)
-    entries = [Entry(fc, p, ACT_ON, PAN_FRAMES) for p in pan_values()]
-    return Block("PanSweep", "2", PAN_STEPS, PAN_FRAMES, 0, "yellow", "S", entries)
+    entries = [Entry(fc, p, ACT_ON_RAMP, PAN_FRAMES) for p in pan_values()]
+    return Block("PanSweep", "2", PAN_STEPS, PAN_FRAMES, 1, "yellow", "S", entries)
+
+
+def _noise_block() -> Block:
+    """fmt=3 noise sweep: same osc_fc values as the tone sweep, but the
+    oscillator-clocked LFSR (osc_conf = NOISE_CONF) instead of a ROM sample, so
+    the noise bandwidth tracks osc_fc the same way the tone pitch does."""
+    entries = [Entry(fc_for_freq(f), PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES, osc_conf=NOISE_CONF)
+               for f in tone_freqs()]
+    return Block("Noise", "3", TONE_COUNT, TONE_FRAMES, 1, "aqua", "m", entries)
 
 
 def build_blocks() -> List[Block]:
@@ -194,6 +222,8 @@ def build_blocks() -> List[Block]:
         _tone_block(),
         _silence_block("Silence", 0),
         _pan_block(),
+        _silence_block("Silence", 0),
+        _noise_block(),
         _silence_block("Silence", 0),
         _sync_block("Sync", 0),
     ]
@@ -237,14 +267,14 @@ def voice_template() -> dict:
         "end_wave": LOOP_END,
         "acc_wave": LOOP_START,
         "osc_saddr": OSC_SADDR,
-        "vol_acc": 0xFFFF,
-        "vol_start": 0xFF,
-        "vol_end": 0xFF,
-        "vol_incr": 0,
+        "vol_acc": 0xFFFF,      # full (first sync keys on instantly)
+        "vol_start": 0x00,      # ramp low bound (silence)
+        "vol_end": 0xFF,        # ramp high bound (full)
+        "vol_incr": RAMP_INCR,  # attack ramp rate (sequencer keys ramp from 0)
         "vol_ctrl": 0x00,
         "pan": PAN_CENTER,
         "osc_ctl": 0x0F,        # start stopped; entry 0 keys it on
-        "vmode": 0,
+        "vmode": RAMP_VMODE,
     }
 
 
@@ -260,6 +290,8 @@ def describe() -> str:
         f"tones           : {TONE_COUNT} semitones {tone_freqs()[0]:.1f}..{tone_freqs()[-1]:.1f} Hz, "
         f"fc {fc_for_freq(tone_freqs()[0])}..{fc_for_freq(tone_freqs()[-1])}, {TONE_FRAMES} frames each",
         f"pan sweep       : {PAN_FREQ:.0f} Hz, {PAN_STEPS} steps {pan_values()}, {PAN_FRAMES} frames each",
+        f"noise sweep     : fmt=3 (conf=0x{NOISE_CONF:02x}), same fc as tones, "
+        f"{TONE_COUNT} steps, {TONE_FRAMES} frames each",
         f"script entries  : {len(script)} / {MDF_MAX_ENTRIES}",
         f"total           : {total_frames(blocks)} frames, {total_samples(blocks)} samples, "
         f"{total_samples(blocks)/SAMPLE_RATE:.2f} s",

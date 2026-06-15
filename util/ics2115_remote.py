@@ -52,8 +52,9 @@ CMD_PEEK_Z80 = 0x35
 CMD_MDF_LOAD = 0x40
 CMD_MDF_START = 0x41
 CMD_MDF_STATUS = 0x42
+CMD_STRESS_REG = 0x43
 
-MDF_ENTRY_SIZE = 6
+MDF_ENTRY_SIZE = 8
 MDF_MAX_ENTRIES = 256
 
 IRQ_LOG_KIND_TIMER = 0
@@ -936,6 +937,15 @@ class ICS2115Remote:
         if len(payload) != 3:
             raise ICSRemoteProtocolError(f"bad mdf status payload length {len(payload)}")
         return bool(payload[0]), struct.unpack(">H", payload[1:3])[0]
+
+    def stress_reg(self, voice: int, reg: int, iters: int) -> int:
+        """OscAcc race repro: hammer voice/reg writes with master-run on and
+        return how many readbacks were clobbered by the sequencer write-back."""
+        payload = self._request(CMD_STRESS_REG,
+                                struct.pack(">BBH", voice & 0x1F, reg & 0xFF, iters & 0xFFFF))
+        if len(payload) != 2:
+            raise ICSRemoteProtocolError(f"bad stress payload length {len(payload)}")
+        return struct.unpack(">H", payload)[0]
 
     def open_audio(self, port: Optional[str] = None, *, latest_capacity: int = 65536):
         open_sim_audio = getattr(self.picorom, "open_audio", None)

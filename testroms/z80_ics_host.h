@@ -49,6 +49,9 @@ bool z80_ics_mdf_load(u16 count);
 bool z80_ics_mdf_start(u8 scale0, u8 preset0);
 bool z80_ics_mdf_status(u8 *running, u16 *index);
 
+/* OscAcc race repro: stress voice/reg writes and count clobbered readbacks. */
+bool z80_ics_stress_reg(u8 voice, u8 reg, u16 iters, u16 *mismatches);
+
 void set_osc_acc(z80_ics_voice_t *voice, u32 addr);
 
 void z80_ics_make_sample_voice(u8 preset, z80_ics_voice_t *voice);

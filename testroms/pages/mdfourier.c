@@ -35,21 +35,26 @@ static void mdf_build_voice(z80_ics_voice_t *v)
     v->osc_end_lo = (u8)((MDF_LOOP_END & 0xf) << 4);
     set_osc_acc(v, MDF_LOOP_START);     /* sets osc_acc_hi/lo + osc_saddr=0x40 */
     v->osc_saddr = MDF_OSC_SADDR;
+    /* Attack-ramp template (see util/mdfourier/mdf_signal.py voice_template):
+       vmode 2 = linear, vol_incr 0xff -> ~7.7 ms ramp; the sequencer starts
+       vol_acc at 0 for ACT_ON_RAMP entries. */
     v->vol_acc = 0xffff;
-    v->vol_start = 0xff;
+    v->vol_start = 0x00;
     v->vol_end = 0xff;
-    v->vol_incr = 0x00;
+    v->vol_incr = 0xff;
     v->vol_ctrl = 0x00;
     v->pan = MDF_PAN_CENTER;
     v->osc_ctl = 0x0f;                  /* start stopped; entry 0 keys it on */
-    v->vmode = 0x00;
+    v->vmode = 0x02;
 }
 
 static void mdf_run(void)
 {
     z80_ics_voice_t v;
     mdf_build_voice(&v);
+    /* The sequencer ping-pongs voices 0 and 1; both need the voice template. */
     z80_ics_write_voice(0, &v);
+    z80_ics_write_voice(1, &v);
     z80_ics_mdf_load_chunk(0, mdf_script_data, (u16)sizeof(mdf_script_data));
     z80_ics_mdf_load(MDF_SCRIPT_COUNT);
     z80_ics_mdf_start(MDF_TIMER_SCALE0, MDF_TIMER_PRESET0);

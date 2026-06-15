@@ -446,58 +446,108 @@ static void clear_irq_log(void)
     irq_log_total = 0;
 }
 
-/* ── MDFourier sequencer ────────────────────────────────────────────────────
-   A script of {fc, pan, action, ticks} entries lives in shared RAM at
-   Z80_ICS_OFF_MDF_SCRIPT.  Each timer-0 IRQ holds the current entry one tick;
-   when its tick budget runs out the next entry is applied to voice 0.  Because
-   the ICS timer and the audio engine share the RTL clock, every step boundary
-   lands at the same sample offset on hardware and in the simulator. */
+/* ── MDFourier sequencer (ping-pong) ────────────────────────────────────────
+   A script of {fc, pan, osc_conf, action, ticks} entries lives in shared RAM at
+   Z80_ICS_OFF_MDF_SCRIPT.  Two voices ping-pong: while one sounds the current
+   entry, the next entry is pre-staged (osc_conf/fc/pan written, voice left
+   stopped) on the other during the hold.  At each timer tick the only
+   time-critical work is the key-on of the pre-staged voice (+ key-off of the
+   previous), so a new sample starts at a constant, minimal latency after the
+   steady timer edge instead of after a variable run of register writes.  The
+   host pre-loads the shared voice template (loop region + full volume, stopped)
+   onto BOTH MDF voices before MDF_START; osc_conf is per-entry so a block can
+   switch a voice to fmt=3 (oscillator-clocked LFSR noise). */
+#define MDF_VOICE_A 0
+#define MDF_VOICE_B 1
+
 static volatile u8  mdf_running;
 static volatile u16 mdf_count;
 static volatile u16 mdf_index;
 static volatile u16 mdf_remaining;
+static volatile u8  mdf_cur;    /* voice currently sounding the active entry */
+static volatile u8  mdf_next;   /* voice pre-staged with the upcoming entry */
 
 static u16 mdf_entry_base(u16 i)
 {
     return (u16)(Z80_ICS_OFF_MDF_SCRIPT + i * Z80_ICS_MDF_ENTRY_SIZE);
 }
 
-static void mdf_apply(u16 i)
-{
-    u16 base = mdf_entry_base(i);
-    u16 fc = get16(base);
-    u8 pan = SHARED[base + 2];
-    u8 act = SHARED[base + 3];
-    ics_write_reg(0, 0x01, Z80_ICS_WIDTH_16, fc);
-    ics_write_reg(0, 0x0c, Z80_ICS_WIDTH_UPPER8, pan);
-    ics_write_reg(0, 0x10, Z80_ICS_WIDTH_UPPER8,
-                  act == Z80_ICS_MDF_ACT_ON ? 0x00 : 0x0f);
-}
-
 static u16 mdf_entry_ticks(u16 i)
 {
-    return get16((u16)(mdf_entry_base(i) + 4));
+    return get16((u16)(mdf_entry_base(i) + 6));
+}
+
+static u8 mdf_entry_act(u16 i)
+{
+    return SHARED[mdf_entry_base(i) + 4];
+}
+
+/* Pre-stage entry i onto `voice` (left stopped): only the per-entry registers
+   change; the loop region + volume come from the host-loaded voice template. */
+static void mdf_stage(u8 voice, u16 i)
+{
+    u16 base = mdf_entry_base(i);
+    ics_write_reg(voice, 0x00, Z80_ICS_WIDTH_UPPER8, SHARED[base + 3]); /* osc_conf */
+    ics_write_reg(voice, 0x01, Z80_ICS_WIDTH_16, get16(base));          /* osc_fc */
+    ics_write_reg(voice, 0x0c, Z80_ICS_WIDTH_UPPER8, SHARED[base + 2]); /* pan */
+}
+
+/* Key on entry i's voice.  ACT_ON_RAMP starts vol_acc at 0 and clears the vol
+   DONE latch so the volume envelope (rate/window come from the voice template)
+   ramps up from silence — removing the key-on click.  ACT_ON (sync pulses)
+   keys on at full volume for a sharp, detectable edge.  The vol setup must
+   happen here at key-on, not during staging, because the vol envelope advances
+   even while the oscillator is stopped. */
+static void mdf_keyon_entry(u8 voice, u16 i)
+{
+    if (mdf_entry_act(i) == Z80_ICS_MDF_ACT_ON_RAMP)
+    {
+        ics_write_reg(voice, 0x09, Z80_ICS_WIDTH_16, 0x0000);    /* vol_acc = 0 */
+        ics_write_reg(voice, 0x0d, Z80_ICS_WIDTH_UPPER8, 0x00);  /* clear vol DONE -> ramp */
+    }
+    else
+    {
+        ics_write_reg(voice, 0x09, Z80_ICS_WIDTH_16, 0xFFFF);    /* vol_acc = full */
+    }
+    ics_write_reg(voice, 0x10, Z80_ICS_WIDTH_UPPER8, 0x00);      /* key on */
+}
+
+static void mdf_keyoff(u8 voice)
+{
+    ics_write_reg(voice, 0x10, Z80_ICS_WIDTH_UPPER8, 0x0f);
 }
 
 /* Called from the timer-0 IRQ once per tick while a sequence is running. */
 static void mdf_tick(void)
 {
+    u8 t;
     if (!mdf_running)
         return;
     if (mdf_remaining)
         mdf_remaining--;
-    if (mdf_remaining == 0)
+    if (mdf_remaining != 0)
+        return;
+
+    mdf_index++;
+    if (mdf_index >= mdf_count)
     {
-        mdf_index++;
-        if (mdf_index >= mdf_count)
-        {
-            mdf_running = 0;
-            ics_write_reg(0, 0x10, Z80_ICS_WIDTH_UPPER8, 0x0f); /* silence */
-            return;
-        }
-        mdf_apply(mdf_index);
-        mdf_remaining = mdf_entry_ticks(mdf_index);
+        mdf_keyoff(mdf_cur);
+        mdf_running = 0;
+        return;
     }
+
+    /* Time-critical: trigger the pre-staged voice (key-on first so the new
+       sample starts at minimal latency), then stop the previous one. */
+    if (mdf_entry_act(mdf_index) != Z80_ICS_MDF_ACT_OFF)
+        mdf_keyon_entry(mdf_next, mdf_index);
+    mdf_keyoff(mdf_cur);
+    t = mdf_cur; mdf_cur = mdf_next; mdf_next = t;
+    mdf_remaining = mdf_entry_ticks(mdf_index);
+
+    /* Non-critical (after the trigger): pre-stage the following entry onto the
+       freed voice, with the whole hold to spare before the next tick. */
+    if ((u16)(mdf_index + 1) < mdf_count)
+        mdf_stage(mdf_next, (u16)(mdf_index + 1));
 }
 
 static void mdf_start(u16 value)
@@ -520,16 +570,45 @@ static void mdf_start(u16 value)
     ics_write_reg(0, 0x43, Z80_ICS_WIDTH_LOWER8, ctl | 0x08);
 
     mdf_index = 0;
+    mdf_cur = MDF_VOICE_A;
+    mdf_next = MDF_VOICE_B;
     if (mdf_count)
     {
-        mdf_apply(0);
+        mdf_stage(mdf_cur, 0);                  /* entry 0 onto the first voice */
+        if (mdf_entry_act(0) != Z80_ICS_MDF_ACT_OFF)
+            mdf_keyon_entry(mdf_cur, 0);
         mdf_remaining = mdf_entry_ticks(0);
+        if (mdf_count > 1)
+            mdf_stage(mdf_next, 1);             /* pre-stage entry 1 */
         mdf_running = 1;
     }
     else
     {
         mdf_running = 0;
     }
+}
+
+/* OscAcc race repro.  With master-run on, the ICS sequencer reads/advances/
+   writes back every voice as a whole word each sample.  A host register write
+   (also a whole-voice read-modify-write) can be clobbered if the sequencer
+   captures the voice in the same window — the write never sticks.  Stress a
+   register and count readbacks that don't match what was just written. */
+static u16 stress_reg(u8 voice, u8 reg, u16 iters)
+{
+    u16 mism = 0;
+    u16 it;
+    if (reg == 0)
+        reg = 0x0a;                 /* OscAcc high by default */
+    ics_write_reg(0, 0x4d, Z80_ICS_WIDTH_LOWER8, 0x05);     /* master run -> seq active */
+    ics_write_reg(voice, 0x10, Z80_ICS_WIDTH_UPPER8, 0x0f); /* keep target stopped */
+    for (it = 0; it < iters; it++)
+    {
+        u16 val = (it & 1) ? 0x5555 : 0xAAAA;
+        ics_write_reg(voice, reg, Z80_ICS_WIDTH_16, val);
+        if (ics_read_reg(voice, reg, Z80_ICS_WIDTH_16) != val)
+            mism++;
+    }
+    return mism;
 }
 
 static void service_irq_c(void)
@@ -734,6 +813,10 @@ static void process_command(void)
         put16(Z80_ICS_OFF_RESULT, (mdf_running ? 0x8000 : 0) | (mdf_index & 0x7fff));
         break;
 
+    case Z80_ICS_CMD_STRESS_REG:
+        put16(Z80_ICS_OFF_RESULT, stress_reg(voice, reg, value));
+        break;
+
     default:
         error = Z80_ICS_ERR_BAD_CMD;
         break;
@@ -799,7 +882,19 @@ void main(void)
 
     while (1)
     {
-        u8 seq = SHARED[Z80_ICS_OFF_SEQ];
+        u8 seq;
+        /* During MDFourier playback, wait for the timer IRQ in HALT so every
+           tick is serviced from the identical state -> constant IRQ latency and
+           minimal key-on jitter.  The timer wakes us each tick, after which we
+           still poll the command mailbox (commands are serviced at the tick
+           rate, which is fine for status polling). */
+        if (mdf_running)
+        {
+            __asm
+                halt
+            __endasm;
+        }
+        seq = SHARED[Z80_ICS_OFF_SEQ];
         if (SHARED[Z80_ICS_OFF_STATUS] == Z80_ICS_STATUS_BUSY && seq != last_seq)
         {
             last_seq = seq;

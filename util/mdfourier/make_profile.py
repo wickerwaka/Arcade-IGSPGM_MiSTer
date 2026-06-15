@@ -70,7 +70,7 @@ def build_c_header() -> str:
 #define MDF_OSC_SADDR      0x{vt['osc_saddr']:02x}
 #define MDF_PAN_CENTER     0x{vt['pan']:02x}
 
-/* {len(packed)} bytes = {len(script)} x 6 (fc_hi fc_lo pan action ticks_hi ticks_lo) */
+/* {len(packed)} bytes = {len(script)} x 8 (fc_hi fc_lo pan osc_conf action reserved ticks_hi ticks_lo) */
 static const unsigned char mdf_script_data[{len(packed)}] = {{
 {body}
 }};

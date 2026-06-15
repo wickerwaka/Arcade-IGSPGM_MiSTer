@@ -155,7 +155,10 @@ def main() -> int:
         # the link (a full CMD_INIT would re-run init and overrun read timeouts).
         info = remote.ping()
         print(f"driver_magic=0x{info.driver_magic:04x}")
+        # The Z80 sequencer ping-pongs voices 0 and 1, so both need the shared
+        # voice template (loop region + full volume, stopped) before the start.
         remote.write_voice(0, make_voice())
+        remote.write_voice(1, make_voice())
         samples = capture(remote, args.target, n_capture)
     finally:
         remote.close()

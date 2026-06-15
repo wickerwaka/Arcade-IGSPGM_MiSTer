@@ -42,4 +42,8 @@
 /* response = {running u8, index_hi, index_lo} */
 #define ICS_REMOTE_CMD_MDF_STATUS       0x42
 
+/* OscAcc race repro. payload = {voice, reg, iters_hi, iters_lo};
+ * response = {mismatch_hi, mismatch_lo} */
+#define ICS_REMOTE_CMD_STRESS_REG       0x43
+
 #endif

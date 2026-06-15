@@ -26,6 +26,9 @@ length:
 - **Tones** — a dense rising semitone sweep (72 tones, 6 octaves).
 - **Pan sweep** — a fixed mid tone stepped through 16 L→R pan positions
   (reg 0x0c), analyzed in stereo.
+- **Noise** — a sweep using the *same* `osc_fc` values as the tone sweep but with
+  the voice in **fmt=3** (oscillator-clocked LFSR noise, `osc_conf = 0x0b`), so
+  the noise bandwidth tracks `osc_fc`. This exercises the fmt-3 noise generator.
 - **Silence**, then an **end sync** pulse train.
 
 Tones come from looping a fixed 64-byte region of the BIOS music ROM and varying
@@ -38,8 +41,22 @@ Sample rate is the native **33075 Hz** (= 33.8688 MHz / 1024); MDFourier accepts
 arbitrary rates and clamps analysis to Nyquist, and the ICS output has nothing
 above ~16.5 kHz, so no resampling is done by default.
 
-Timer 0 runs at ~239.67 Hz (scale `0x3F`, preset `0x89`), i.e. one IRQ every 138
-output samples — one MDFourier "frame".
+The timer-0 period is set in `mdf_signal.py` (one IRQ per MDFourier "frame"); the
+profile's frame-ms is computed from it.
+
+## Sequencer (ping-pong, jitter-minimized)
+
+The Z80 drives the sequence from the continuously-running ICS timer-0 IRQ. To
+keep each sample's start time consistent (low jitter relative to the steady timer
+edge), it **ping-pongs two voices**: while one voice sounds the current entry,
+the next entry is pre-staged (`osc_conf`/`osc_fc`/pan written, voice left
+stopped) on the other voice during the hold. At each tick the only time-critical
+work is the key-on of the pre-staged voice (plus key-off of the previous), then
+the following entry is pre-staged after the trigger. The Z80 also `HALT`s waiting
+for the timer IRQ during playback, so every tick is serviced from the identical
+state → constant IRQ latency. The host loads the shared voice template (loop
+region + full volume, stopped) onto **both** MDF voices (0 and 1) before start;
+`osc_conf` is carried per script entry so the noise block can switch to fmt=3.
 
 Inspect the current signal with:
 
