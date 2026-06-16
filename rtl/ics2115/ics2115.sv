@@ -1214,7 +1214,12 @@ module ics2115
 
             if (host_voice_wr_apply) begin
                 osc_irq_en[host_voice_wr_voice] <= host_voice_wr_data.osc_conf[OSC_IRQ];
-                osc_irq_pending[host_voice_wr_voice] <= osc_irq_pending[host_voice_wr_voice] | host_voice_wr_data.osc_conf[OSC_IRQ_PEND];
+                // Host osc pend requires bit7 (PEND) AND bit5 (IRQ enable) together
+                // -- hardware RE (matrix 00-C): 0xA0 latches a pend, 0x80 alone is a
+                // no-op.  Gating on bit7 alone let a stale bit7 in an osc_conf write
+                // spuriously latch a pend.
+                osc_irq_pending[host_voice_wr_voice] <= osc_irq_pending[host_voice_wr_voice]
+                    | (host_voice_wr_data.osc_conf[OSC_IRQ_PEND] & host_voice_wr_data.osc_conf[OSC_IRQ]);
                 vol_irq_en[host_voice_wr_voice] <= host_voice_wr_data.vol_ctrl[VOL_IRQ];
                 // vol pends are NOT host-settable (hardware: VCtl bit7 writes
                 // latch nothing; only real envelope events pend)
