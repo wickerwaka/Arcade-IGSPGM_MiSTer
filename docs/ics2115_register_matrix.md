@@ -187,7 +187,7 @@ drivers (theglad/espgaluda).
 |---|---|---|---|
 | P0-A | bit7 = master IRQ flag, bit1 = voice IRQ, bit0 = timer IRQ | T-SYS | TESTED-PASS |
 | P0-B | bit1 polarity/gating: raw pending vs enable-gated (RTL gates the whole byte under `irq_on` but bit1 itself is raw pending) | T-IRQ | TESTED-PASS |
-| P0-C | bit6 read value on real hardware (RTL uses it for its write-FIFO; real chip may define it differently or not at all) | T-SYS | TESTED-PASS |
+| P0-C | bit6 read value: **hardware reads 0** (2026-06-16 retest: 0/200 idle, 0/200 during a host-write burst — status port always 0x00). RTL repurposes bit6 as a write-FIFO-busy flag, so it can read 1 where the real chip reads 0 — an **RTL-specific divergence** (harmless unless a game polls status bit6/BUSY) | T-SYS | TESTED-PASS |
 
 ## Port 0x8001 — register select (write + **readback**)
 
@@ -210,7 +210,7 @@ never precede with a voice select.
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| P2-A | low-then-high write ordering forms a 16-bit write; what does a high-only or low-only write do to the other byte per register? | T-RB | TESTED-PASS |
+| P2-A | low-then-high write forms a 16-bit write. **Hardware retest (2026-06-16, osc_fc):** a lone LOW-byte write only *latches* (no commit — value unchanged until a high write); a lone HIGH-byte write commits `{hi, latched_lo}`. Matches the RTL low-latch/high-commit scheme | T-RB | TESTED-PASS |
 | P2-B | read side-effects (IRQV clear, timer IRQ clear) trigger on the correct port: RTL clears IRQV only on **high-byte** read (`ics2115.sv:707`), timer IRQ on **either** byte (`ics2115.sv:727`). Timer-ack-on-low-byte is confirmed (BIOS + espgalbl, see 40-B); the IRQV high-byte-only port is still inferred (see 0F-B) | T-IRQ, T-IRQV | ASSUMED |
 
 ---
@@ -244,7 +244,7 @@ osc-end IRQ sets bit7 in `ics2115_osc.sv:479-482`.
 |---|---|---|---|
 | 00-A | readback returns written value; bit7 set by hardware on osc IRQ | T-RB, T-VOICE | TESTED-SIM |
 | 00-B | format bits 1:0: `00`=lin8, `01`=u-law, `10`=16-bit, `11`=u-law (== `01`; ULAW bit priority), NOT white noise | T-AUD, T-NOISE | TESTED-PASS |
-| 00-C | hardware: host pend requires bit7 AND bit5 together (0xA0); bit7 alone is a no-op. **RTL FIXED (2026-06-16): host pend now requires bit7 AND bit5 (`ics2115.sv:1217`); it previously pended on bit7 alone — that divergence had been mis-marked TESTED-PASS. Re-validation pending.** Pend populates 0x4B (0x80|voice) and IRQV but never asserts the IRQ output | T-IRQV | MODELED |
+| 00-C | host osc pend behavior. **RTL FIXED (2026-06-16): host pend now requires bit7 AND bit5 (`ics2115.sv:1217`); previously pended on bit7 alone (had been mis-marked TESTED-PASS).** **Retest (2026-06-16) INCONCLUSIVE:** could not reproduce a host-set pend on a stopped voice — osc_conf 0x80 *and* 0xA0 both left IRQV idle (0xe5, no change across consume) and osc_conf read back 0x00, so neither latched a detectable pend. The host-pend latch needs conditions not yet isolated (active voice / sequencer interaction?). The bit5 requirement is a conservative fix (fewer spurious pends) but the exact hardware rule is unconfirmed; the original "0xA0 latches" claim is itself now in doubt | T-IRQV | MODELED |
 | 00-D | bit5=0 with pending bit7=1: is the IRQ line masked but the bit retained? | T-VOICE | TESTED-PASS |
 | 00-F | fmt `11` is **u-law**, identical to fmt `01` — NOT a noise generator. Hardware RE (2026-06-16, espgalbl, single-voice probe via ics_remote, analog capture): fmt3 reads ROM (a short loop is periodic, not broadband), matches fmt1 in fundamental (390.3 vs 390.5 Hz) and RMS (~7x quieter than 8-bit/16-bit). RTL now decodes u-law whenever the ULAW bit is set (ics2115_osc.sv); sim-verified fmt3==fmt1 (xcorr 1.0000, RMS identical), fmt3!=fmt0. **CORRECTION (2026-06-16):** the prior "oscillator-clocked LFSR noise (T-NOISE)" model was wrong — its "ROM-independent amplitude" signature was a misread (the captures were of u-law ROM, which has a flatter envelope than lin8, not a generator); the LFSR has been removed | T-NOISE | TESTED-PASS |
 
@@ -256,7 +256,7 @@ step uses fc[15:1].
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| 01-A | 16-bit r/w; bit0 ignored/forced 0 (hardware-trace confirmed per docs/ics2115_z80_trace_compare.md) | T-RB | TESTED-PASS |
+| 01-A | 16-bit r/w; bit0 ignored for frequency (forced 0 on use, hardware-trace confirmed). NB (2026-06-16 retest): **readback returns bit0=1** regardless of the written value (0x1234->0x1235, 0x4444->0x4445, consistently) — a read quirk; the RTL reads back the stored value (bit0 as written). Cosmetic (bit0 is unused for pitch) | T-RB | TESTED-PASS |
 
 ## 0x02/0x03 — OscStart high/low; 0x04/0x05 — OscEnd high/low
 
@@ -413,7 +413,7 @@ forced 1); write stores 8 bits, sequencer keys on/off from 0x00/0x0f.
 | 10-A | 0x00 = key-on, 0x0f = key-off/reset | T-RB, T-AUD | MODELED |
 | 10-B | OscCtl key-on 0x00/0x10/0x20/0x30 produce identical audio on BOTH targets — bits 5:4 (filterconfig) have no standalone audible effect in this configuration | T-AUD | TESTED-PASS |
 | 10-C | bit1 as temporary "reprogram gate" (TB `shadow|0x02`): voice halts cleanly and resumes | T-OCTL | TESTED-PASS |
-| 10-D | readback: bit0 = stopped/done status (TB reads it); RTL returns stored bits 1:0 with upper bits 1 — is the upper-6 forced-1 shape right? | T-RB, T-OCTL | TESTED-PASS |
+| 10-D | readback shape **confirmed (2026-06-16 retest):** read = `0xFC | (written & 0x03)` — upper 6 bits forced 1, bits 1:0 = stored (e.g. wrote 0x00->0xFC, 0x03->0xFF, 0xAA->0xFE). Matches RTL ("stored bits 1:0 with upper bits 1") | T-RB, T-OCTL | TESTED-PASS |
 | 10-E | MAME timer-start guess for bits 0/1: configure timers, write OscCtl bit0/1, observe timer IRQs | T-OCTL | TESTED-PASS |
 
 ## 0x11 — OscSAddr (static address / bank) — Upper8
