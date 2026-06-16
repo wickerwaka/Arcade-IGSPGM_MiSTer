@@ -211,7 +211,7 @@ never precede with a voice select.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | P2-A | low-then-high write ordering forms a 16-bit write; what does a high-only or low-only write do to the other byte per register? | T-RB | TESTED-PASS |
-| P2-B | read side-effects (IRQV clear, timer IRQ clear) trigger on the correct port: RTL clears IRQV only on **high-byte** read (`ics2115.sv:707`), timer IRQ on **either** byte (`ics2115.sv:727`) | T-IRQ, T-IRQV | ASSUMED |
+| P2-B | read side-effects (IRQV clear, timer IRQ clear) trigger on the correct port: RTL clears IRQV only on **high-byte** read (`ics2115.sv:707`), timer IRQ on **either** byte (`ics2115.sv:727`). Timer-ack-on-low-byte is confirmed (BIOS + espgalbl, see 40-B); the IRQV high-byte-only port is still inferred (see 0F-B) | T-IRQ, T-IRQV | ASSUMED |
 
 ---
 
@@ -224,9 +224,11 @@ RTL read mux `ics2115.sv:570-655`; voice writes are buffered through a FIFO
 ## 0x00 — OscConf (oscillator configuration) — Upper8
 
 Bits (TB doc + PGM, corroborating): 7=IRQ pending/status, 6=invert/reverse,
-5=IRQ enable, 4=bidir, 3=loop, 1:0=sample format. **Format encoding (TB doc
-conclusion 4): `00`=linear 8-bit, `01`=u-law 8-bit, `10`=linear 16-bit,
-`11`=white noise/special — diverges from MAME's bit2=8bit/bit1=stop model.**
+5=IRQ enable, 4=bidir, 3=loop, 1:0=sample format. **Format encoding: `00`=linear
+8-bit, `01`=u-law 8-bit, `10`=linear 16-bit, `11`=**u-law** (the ULAW bit 0 takes
+priority over the 16BIT bit 1, so `11` decodes identically to `01` — hardware RE
+2026-06-16, espgalbl; the earlier TB-doc "white noise/special" reading of `11`
+was wrong). Diverges from MAME's bit2=8bit/bit1=stop model.**
 
 Evidence: 6 BIOS sites (inventory). Key ones: `InitializeSoundChannels` writes
 0x00 after key-off; init self-test polls OscConf until bit7 clears
@@ -241,10 +243,10 @@ osc-end IRQ sets bit7 in `ics2115_osc.sv:479-482`.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 00-A | readback returns written value; bit7 set by hardware on osc IRQ | T-RB, T-VOICE | TESTED-SIM |
-| 00-B | format bits 1:0 per TB encoding incl. `11` = white noise/special | T-AUD | TESTED-PASS |
-| 00-C | hardware: host pend requires bit7 AND bit5 together (0xA0); bit7 alone is a no-op (RTL pends on bit7 alone). Pend populates 0x4B (0x80|voice) and IRQV but never asserts the IRQ output | T-IRQV | TESTED-PASS |
+| 00-B | format bits 1:0: `00`=lin8, `01`=u-law, `10`=16-bit, `11`=u-law (== `01`; ULAW bit priority), NOT white noise | T-AUD, T-NOISE | TESTED-PASS |
+| 00-C | hardware: host pend requires bit7 AND bit5 together (0xA0); bit7 alone is a no-op. **RTL DIVERGES: it pends on host bit7 alone (`ics2115.sv:1217`, no bit5 check) — should require bit5; status was mis-marked TESTED-PASS despite this noted divergence.** Pend populates 0x4B (0x80|voice) and IRQV but never asserts the IRQ output, so audible impact is limited, but the model is wrong and an osc_conf write carrying a stale bit7 can spuriously latch a pend | T-IRQV | TESTED-FAIL |
 | 00-D | bit5=0 with pending bit7=1: is the IRQ line masked but the bit retained? | T-VOICE | TESTED-PASS |
-| 00-F | fmt `11` = oscillator-clocked 8-bit noise generator (T-NOISE hw RE). RTL IMPLEMENTED (ics2115_osc.sv): free-running 16-bit Galois LFSR (taps 0xB400, seed 0xACE1, never reset on key-on), 8-bit output placed lin8-style, advanced one step per sample-index (acc>>12) crossing so pitch tracks OscFC. Sim reproduces all hw signatures: ROM-independent amplitude (flat across regions vs lin8 varying), 8-bit (256 distinct), OscFC scaling (zcr 0.06->0.25->0.51 vs hw 0.11->0.37->0.50 — converges at high fc; low/mid offset is resampler difference, not a model error). Exact hw polynomial unrecoverable/free choice; no PGM game uses fmt3 | T-NOISE | TESTED-PASS |
+| 00-F | fmt `11` is **u-law**, identical to fmt `01` — NOT a noise generator. Hardware RE (2026-06-16, espgalbl, single-voice probe via ics_remote, analog capture): fmt3 reads ROM (a short loop is periodic, not broadband), matches fmt1 in fundamental (390.3 vs 390.5 Hz) and RMS (~7x quieter than 8-bit/16-bit). RTL now decodes u-law whenever the ULAW bit is set (ics2115_osc.sv); sim-verified fmt3==fmt1 (xcorr 1.0000, RMS identical), fmt3!=fmt0. **CORRECTION (2026-06-16):** the prior "oscillator-clocked LFSR noise (T-NOISE)" model was wrong — its "ROM-independent amplitude" signature was a misread (the captures were of u-law ROM, which has a flatter envelope than lin8, not a generator); the LFSR has been removed | T-NOISE | TESTED-PASS |
 
 ## 0x01 — OscFC (frequency counter) — WORD
 
@@ -486,10 +488,10 @@ that timer's pending IRQ (`ics2115.sv:721-733`); write 0 stops the timer.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 40-A | write sets preset; period = `((scale&0x1f)+1)*(preset+1) << (4+(scale>>5))` (MAME formula, ics2115.cpp:1097-1101) | T-TMR | TESTED-PASS |
-| 40-B | hardware: only a full 16-bit read of the preset acks; lo8/hi8 reads do NOT clear (RTL clears on either byte) | T-IRQ | TESTED-PASS |
+| 40-B | acking the timer pending: a **single low-byte read** of the preset clears it. Both the BIOS `HandleIrqBit0Service` (ram:1519) and the live z80 trace ack with one `R p2 0x40` read, and espgalbl relies on this. RTL clears on either byte. **CORRECTION (2026-06-16):** the former "only a full 16-bit read acks; lo8/hi8 do NOT clear" claim was wrong — the test only showed a 16-bit read is *sufficient*, never that a lone byte *fails*, and it contradicted the cited BIOS evidence. Implementing it (65dd0d2) made `irq_pending` stick for drivers that ack with one low read → espgalbl music ran ~2x fast (fixed in c006920) | T-IRQ | TESTED-PASS |
 | 40-C | read value: preset, or live countdown? (BIOS discards it; RTL returns preset) | T-RB, T-IRQ | TESTED-PASS |
 | 40-D | preset=0 stops the timer (confirmed both targets) | T-TMR | TESTED-PASS |
-| 40-E | hardware: timer-0 scale[4:0]=0 (mult field 0) also stops the timer — no pending, no IRQs (RTL runs at mult=1) | T-TMR | TESTED-PASS |
+| 40-E | hardware: timer-0 scale[4:0]=0 (mult field 0) also stops the timer — no pending, no IRQs (RTL stops at mult=0, `ics2115.sv:1286`, matches) | T-TMR | TESTED-PASS |
 
 ## 0x42 — Timer 0 scale — Lower8
 
@@ -499,7 +501,7 @@ RTL: write decoded; **read undecoded -> 0x00**.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 42-A | scale bits [4:0] multiplier, [7:5] shift | T-TMR | TESTED-PASS |
-| 42-B | read value on hardware (RTL returns 0) | T-RB | TESTED-PASS |
+| 42-B | read value on hardware = 0x7878 open bus (RTL returns 0x7878, `ics2115.sv:733`, matches) | T-RB | TESTED-PASS |
 
 ## 0x43 — Timer control + timer-1 shift (write) / timer IRQ status (read) — Lower8
 
@@ -587,7 +589,7 @@ untested for voice != 0.
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
 | 4B-A | returns `0x80 | voice` while an osc IRQ pends (hw confirmed voice 0; voice != 0 still to record) | T-SYS | TESTED-PASS |
-| 4B-B | idle value = 0x02 on hardware (RTL stub reads 0x80) | T-RB | TESTED-PASS |
+| 4B-B | idle value = 0x02 on hardware (RTL reads `last_irq_voice` → 0x02 idle, `ics2115.sv:749`, matches) | T-RB | TESTED-PASS |
 | 4B-C | bits 6:5 meaning (masked out by BIOS) | T-SYS | TESTED-PASS |
 
 ## 0x4C — chip revision — Lower8
@@ -627,7 +629,7 @@ register interface.
 
 | ID | Assumed behavior | Test | Status |
 |---|---|---|---|
-| 4D-A | readback: stored mask 0x05 only (RTL stores nothing) | T-RB | TESTED-PASS |
+| 4D-A | readback: stored mask 0x05 only (RTL stores+reads `sys_ctl` masked to 0x05, `ics2115.sv:756`, matches) | T-RB | TESTED-PASS |
 | 4D-B | bit0 gates timer counting (pending never latches when clear); BIOS strobe = stop/start | T-IRQ | TESTED-PASS |
 | 4D-C | bits 0 AND 2 are the MASTER CHIP-RUN gate (hw 2026-06-13 gate-scope): with them clear the whole oscillator engine freezes — audio rms=0, OscAcc does not advance, no timers, no IRQs. RTL gates sample_tick + mutes output + timer/IRQ on bit0&bit2. bit3 reads set at boot, doesn't store | T-SYS,T-AUD | TESTED-PASS |
 | 4D-D | RTL must model: stored mask 0x05, bit0 timer gate | — | TESTED-PASS |
