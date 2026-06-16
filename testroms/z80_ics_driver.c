@@ -161,23 +161,8 @@ static void irq_enable(void) __naked
     __endasm;
 }
 
-static void ics_wait_idle(void)
-{
-    /* Do not poll the hardware busy bit here: hardware tests showed it is not
-       reliable enough for this debug driver.  Still leave a fixed settle time
-       between ICS host accesses.  Keep this conservative for real hardware; the
-       BIOS routines are hand-written and have predictable instruction spacing,
-       while this debug driver goes through C call glue. */
-    __asm
-        ld b,#128
-    00001$:
-        djnz 00001$
-    __endasm;
-}
-
 static void ics_select_reg(u8 reg)
 {
-    ics_wait_idle();
     ics_out_reg(reg);
 }
 
@@ -185,7 +170,6 @@ static void ics_select_voice(u8 voice)
 {
     ics_select_reg(ICS_REG_OSC_SELECT);
     ics_out_lo(voice & 0x1f);
-    ics_wait_idle();
 }
 
 static void ics_write_active_osc(void)
@@ -194,7 +178,6 @@ static void ics_write_active_osc(void)
        OUT 8001,0e; OUT 8003,1f. */
     ics_select_reg(0x0e);
     ics_out_hi(0x1f);
-    ics_wait_idle();
 }
 
 static u8 ics_reg_uses_voice_select(u8 reg)
@@ -242,7 +225,6 @@ static void ics_write_selected_reg(u8 reg, u8 width, u16 value)
         ics_out_lo((u8)value);
         ics_out_hi((u8)(value >> 8));
     }
-    ics_wait_idle();
 }
 
 static void ics_write_reg(u8 voice, u8 reg, u8 width, u16 value)
@@ -490,6 +472,14 @@ static void mdf_stage(u8 voice, u16 i)
     ics_write_reg(voice, 0x00, Z80_ICS_WIDTH_UPPER8, SHARED[base + 3]); /* osc_conf */
     ics_write_reg(voice, 0x01, Z80_ICS_WIDTH_16, get16(base));          /* osc_fc */
     ics_write_reg(voice, 0x0c, Z80_ICS_WIDTH_UPPER8, SHARED[base + 2]); /* pan */
+    /* ACT_ON (sync pulses) plays at constant full volume, so pre-stage vol_acc
+       here, off the time-critical path.  That leaves the key-on a single
+       osc_ctl write — symmetric with key-off — so the ON pulse is exactly one
+       frame long instead of short by the extra voiced vol_acc write's settle
+       time.  ACT_ON_RAMP must set vol at key-on (the envelope advances while the
+       oscillator is stopped), so it is left alone. */
+    if (mdf_entry_act(i) == Z80_ICS_MDF_ACT_ON)
+        ics_write_reg(voice, 0x09, Z80_ICS_WIDTH_16, 0xFFFF);          /* vol_acc full */
 }
 
 /* Key on entry i's voice.  ACT_ON_RAMP starts vol_acc at 0 and clears the vol
@@ -505,10 +495,8 @@ static void mdf_keyon_entry(u8 voice, u16 i)
         ics_write_reg(voice, 0x09, Z80_ICS_WIDTH_16, 0x0000);    /* vol_acc = 0 */
         ics_write_reg(voice, 0x0d, Z80_ICS_WIDTH_UPPER8, 0x00);  /* clear vol DONE -> ramp */
     }
-    else
-    {
-        ics_write_reg(voice, 0x09, Z80_ICS_WIDTH_16, 0xFFFF);    /* vol_acc = full */
-    }
+    /* ACT_ON: vol_acc was pre-staged full in mdf_stage, so the key-on is just
+       this single osc_ctl write (symmetric with key-off -> frame-exact pulse). */
     ics_write_reg(voice, 0x10, Z80_ICS_WIDTH_UPPER8, 0x00);      /* key on */
 }
 

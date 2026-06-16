@@ -5,6 +5,41 @@ for measuring end-to-end ICS2115 audio fidelity of the core against real
 hardware, and for regressing it over time. The same signal is played on both
 targets, captured to WAV, and compared.
 
+## Prerequisites (read this first)
+
+Every host-driven ICS test here — `run.py`, `sync_test.py`, and anything else
+using `ICS2115Remote` over the debug link — talks to the **`ics_remote` page** of
+the `pgm_test` ROM. Two things must be set up or the tools fail in confusing ways:
+
+1. **Build the test ROM with `PAGE=ics_remote`.** The default `pgm_test` build
+   (`make -C testroms TARGET=pgm_test`, no `PAGE=`) compiles only `sprite_test` +
+   `debug` — it does **not** include `ics_remote`, so the debug-link mailbox is
+   never serviced and every command (even `ping`) times out as:
+
+   ```
+   ICSRemoteProtocolError: short read: wanted 6, got 0
+   ```
+
+   If you see that, you almost certainly forgot `PAGE=ics_remote`:
+
+   ```bash
+   make -j8 -C testroms TARGET=pgm_test PAGE=ics_remote
+   ```
+
+   `ics_remote` is the only page in that build, so the ROM boots straight into it
+   and the debug link is live immediately (`ping` returns `driver_magic=0x1c53`).
+   (The standalone `mdfourier` page is the exception — it self-runs on boot and
+   needs no host; build it with `PAGE=mdfourier`.)
+
+2. **Point the simulator at the correct ROM set** with `PGM_ROM_DIR`. The sim
+   defaults to `../roms`, which does not exist in this checkout. Use:
+
+   ```bash
+   PGM_ROM_DIR=~/Documents/PGM_Roms python3 util/mdfourier/run.py --target sim ...
+   ```
+
+   Do **not** use `~/Source/PGMBuilder/roms` — it is the wrong set.
+
 ## Why it is reproducible
 
 The whole signal is driven by **ICS timer 0** from inside the Z80 timer-IRQ
@@ -70,6 +105,7 @@ python3 util/mdfourier/mdf_signal.py
 - `util/mdfourier/make_profile.py` — writes `pgm_mdfourier.mfn` (and optionally
   the C script header for the standalone page).
 - `util/mdfourier/run.py` — play + capture a WAV from sim or hardware.
+- `util/mdfourier/sync_test.py` — focused sync-pulse timing test (see below).
 - `util/mdfourier/compare.py` — timer-locked spectral compare + MDFourier hand-off.
 - `util/mdfourier/pgm_mdfourier.mfn` — generated MDFourier profile.
 - `testroms/pages/mdfourier.c` + `mdfourier_script.h` — standalone capture page.
@@ -120,6 +156,22 @@ The standalone `mdfourier` page plays the signal once on boot without a host
 
 ```bash
 make -C testroms picorom PAGE=mdfourier
+```
+
+## Focused sync-pulse timing test
+
+MDFourier alignment depends on the sync pulse train being a clean square wave in
+time: each pulse exactly one frame long, each gap one frame. `sync_test.py`
+isolates **just** the sync pulses (no tones/pan), captures them, and
+measures every pulse's ON duration and following OFF gap via a sub-sample
+envelope edge detector, reporting bias, spread, and PASS/FAIL at a ±0.1 ms
+tolerance. Same `PAGE=ics_remote` + `PGM_ROM_DIR` prerequisites as above.
+
+```bash
+PGM_ROM_DIR=~/Documents/PGM_Roms \
+  python3 util/mdfourier/sync_test.py --target sim --pulses 20 --out /tmp/sync_sim.wav
+PGM_ROM_DIR=~/Documents/PGM_Roms \
+  python3 util/mdfourier/sync_test.py --target hw  --pulses 30
 ```
 
 ## Notes
