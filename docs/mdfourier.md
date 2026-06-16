@@ -61,9 +61,6 @@ length:
 - **Tones** — a dense rising semitone sweep (72 tones, 6 octaves).
 - **Pan sweep** — a fixed mid tone stepped through 16 L→R pan positions
   (reg 0x0c), analyzed in stereo.
-- **Noise** — a sweep using the *same* `osc_fc` values as the tone sweep but with
-  the voice in **fmt=3** (oscillator-clocked LFSR noise, `osc_conf = 0x0b`), so
-  the noise bandwidth tracks `osc_fc`. This exercises the fmt-3 noise generator.
 - **Silence**, then an **end sync** pulse train.
 
 Tones come from looping a fixed 64-byte region of the BIOS music ROM and varying
@@ -90,8 +87,7 @@ work is the key-on of the pre-staged voice (plus key-off of the previous), then
 the following entry is pre-staged after the trigger. The Z80 also `HALT`s waiting
 for the timer IRQ during playback, so every tick is serviced from the identical
 state → constant IRQ latency. The host loads the shared voice template (loop
-region + full volume, stopped) onto **both** MDF voices (0 and 1) before start;
-`osc_conf` is carried per script entry so the noise block can switch to fmt=3.
+region + full volume, stopped) onto **both** MDF voices (0 and 1) before start.
 
 Inspect the current signal with:
 

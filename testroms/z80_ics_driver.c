@@ -437,8 +437,8 @@ static void clear_irq_log(void)
    previous), so a new sample starts at a constant, minimal latency after the
    steady timer edge instead of after a variable run of register writes.  The
    host pre-loads the shared voice template (loop region + full volume, stopped)
-   onto BOTH MDF voices before MDF_START; osc_conf is per-entry so a block can
-   switch a voice to fmt=3 (oscillator-clocked LFSR noise). */
+   onto BOTH MDF voices before MDF_START; osc_conf is carried per-entry so a
+   block can override the voice format if needed. */
 #define MDF_VOICE_A 0
 #define MDF_VOICE_B 1
 

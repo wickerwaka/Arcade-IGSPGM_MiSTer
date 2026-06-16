@@ -92,42 +92,29 @@ module ics2115_osc
     logic osc_conf_ulaw;
     logic osc_conf_8bit_linear;
     logic osc_conf_16bit;
-    logic osc_conf_noise;   // fmt 11: oscillator-clocked noise generator
 
+    // Sample format from osc_conf[1:0] = {OSC_16BIT, OSC_ULAW}.  The ULAW bit
+    // takes priority: hardware RE (2026-06-16, espgalbl) shows fmt 11 (both bits)
+    // is u-law, identical to fmt 01 -- NOT a noise generator.  So:
+    //   x1 (01,11): u-law 8-bit companded
+    //   00        : 8-bit linear
+    //   10        : 16-bit linear
     always_comb begin
         osc_conf_8bit = 0;
         osc_conf_ulaw = 0;
         osc_conf_8bit_linear = 0;
         osc_conf_16bit = 0;
-        osc_conf_noise = 0;
 
-        if (~v.osc_conf[OSC_16BIT]) begin
+        if (v.osc_conf[OSC_ULAW]) begin
             osc_conf_8bit = 1;
-            if (v.osc_conf[OSC_ULAW])
-                osc_conf_ulaw = 1;
-            else
-                osc_conf_8bit_linear = 1;
-        end else if (v.osc_conf[OSC_ULAW]) begin
-            // fmt 11 (both format bits set): white-noise generator, not 16-bit.
-            osc_conf_noise = 1;
+            osc_conf_ulaw = 1;
+        end else if (~v.osc_conf[OSC_16BIT]) begin
+            osc_conf_8bit = 1;
+            osc_conf_8bit_linear = 1;
         end else begin
             osc_conf_16bit = 1;
         end
     end
-
-    // Free-running noise generator (T-NOISE hw RE 2026-06-13): fmt 11 outputs
-    // an 8-bit value from a free-running LFSR instead of a ROM sample,
-    // advanced at the oscillator step (one new value per integer sample-index
-    // crossing) so its pitch tracks OscFC.  Never reset on key-on -> output is
-    // uncorrelated across key-ons, matching hardware.  Polynomial is a free
-    // choice (exact hw polynomial is unrecoverable through the resampled
-    // audio path, and no PGM game uses fmt 11): 16-bit Galois, taps 0xB400.
-    logic [15:0] noise_lfsr;
-    function automatic logic [15:0] lfsr_next(input logic [15:0] s);
-        lfsr_next = s[0] ? (s >> 1) ^ 16'hB400 : (s >> 1);
-    endfunction
-    // 8-bit sample value placed like a lin8 sample.
-    wire signed [15:0] noise_sample = $signed({noise_lfsr[7:0], 8'h00});
 
     // Volume-envelope step per sample tick (26-bit vol_acc units).
     // Hardware rate law (T-VINCR2 dense sweep 2026-06-13, fit within ~6%):
@@ -292,7 +279,6 @@ module ics2115_osc
             vright        <= 16'd0;
             sample1       <= 16'sd0;
             sample2       <= 16'sd0;
-            noise_lfsr    <= 16'hACE1;   // nonzero seed (free-running; key-on does not reset)
             interp_sample <= 16'sd0;
             audio_left    <= 24'sd0;
             audio_right   <= 24'sd0;
@@ -419,9 +405,7 @@ module ics2115_osc
                         vright <= 16'd0;
 
                     // Decode sample1 from ROM data
-                    if (osc_conf_noise) begin
-                        sample1 <= noise_sample;       // fmt 11: generator, ROM ignored
-                    end else if (osc_conf_ulaw) begin
+                    if (osc_conf_ulaw) begin
                         if (~cur_addr[0])
                             sample1 <= ulaw_decode(rom_data[15:8]);
                         else
@@ -453,9 +437,7 @@ module ics2115_osc
                 // SAMPLE_WAIT: ROM data for sample2 arrived. Latch sample2.
                 // ─────────────────────────────────────────────────────────────
                 ST_SAMPLE_WAIT: begin
-                    if (osc_conf_noise) begin
-                        sample2 <= noise_sample;       // same generator value (no interp)
-                    end else if (osc_conf_ulaw) begin
+                    if (osc_conf_ulaw) begin
                         if (~next_addr[0])
                             sample2 <= ulaw_decode(rom_data[15:8]);
                         else
@@ -512,17 +494,6 @@ module ics2115_osc
                             next_osc = v.osc_acc + {14'd0, v.osc_fc[15:1]};
                             osc_left = $signed({1'b0, v.osc_end}) - $signed({1'b0, next_osc});
                         end
-
-                        // Noise generator advances one LFSR step each time the
-                        // oscillator crosses to a new integer sample index, so
-                        // the noise rate tracks OscFC (held value at low fc,
-                        // full white near fc=1.0).  Free-running: never reset.
-                        // Sample index granularity is acc>>12 (MAME: saddr<<20
-                        // | acc>>12), so step on bit-12 crossings to match the
-                        // measured OscFC noise rate.
-                        if (osc_conf_noise &&
-                            (next_osc[28:12] != v.osc_acc[28:12]))
-                            noise_lfsr <= lfsr_next(noise_lfsr);
 
                         if (osc_left >= 28'sd0) begin
                             v.osc_acc <= next_osc;

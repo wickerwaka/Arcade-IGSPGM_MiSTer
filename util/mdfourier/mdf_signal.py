@@ -5,7 +5,7 @@ Everything downstream is derived from here: the Z80 sequencer script bytes
 (uploaded to the TestROM driver), the MDFourier ``.mfn`` profile, the static
 voice template, and the expected capture length.  The signal is a standard
 MDFourier layout — start sync pulse train, a dense rising semitone sweep, a
-pan sweep, a noise-floor silence, and an end sync pulse train.
+pan sweep, a silence (noise floor) block, and an end sync pulse train.
 
 Why this is reproducible across hardware and the simulator: the whole sequence
 is driven by ICS timer 0 inside the Z80 IRQ handler, and the ICS timer and the
@@ -23,8 +23,7 @@ ROM therefore repeats at::
 so pitch is proportional to osc_fc and one semitone is a factor of 2**(1/12).
 A fixed loop with varying osc_fc keeps a constant timbre; the per-tick
 sequencer rewrites osc_conf (0x00), osc_fc (0x01), pan (0x0c) and osc_ctl
-(0x10).  The noise block reuses the tone-sweep osc_fc values but sets
-osc_conf to fmt=3 (oscillator-clocked LFSR), so its bandwidth tracks osc_fc.
+(0x10).
 """
 
 from __future__ import annotations
@@ -59,7 +58,6 @@ LOOP_END = LOOP_START + LOOP_LEN
 
 # ── Voice template (fixed parts; fc/pan/osc_ctl/osc_conf come from the script) ─
 OSC_CONF = 0x08                # loop, linear-8, no IRQ (tone/sync/pan)
-NOISE_CONF = 0x0B              # loop + format 11 = fmt=3 oscillator-clocked LFSR
 OSC_SADDR = 0x40
 PAN_CENTER = 0x80
 
@@ -153,7 +151,7 @@ class Entry:
     pan: int
     action: int
     ticks: int
-    osc_conf: int = OSC_CONF        # voice format (lets a block switch to fmt=3)
+    osc_conf: int = OSC_CONF        # voice format (per-entry override; blocks use default)
 
     def pack(self) -> bytes:
         # 8 bytes: fc(u16) pan osc_conf action reserved ticks(u16)
@@ -205,15 +203,6 @@ def _pan_block() -> Block:
     return Block("PanSweep", "2", PAN_STEPS, PAN_FRAMES, 1, "yellow", "S", entries)
 
 
-def _noise_block() -> Block:
-    """fmt=3 noise sweep: same osc_fc values as the tone sweep, but the
-    oscillator-clocked LFSR (osc_conf = NOISE_CONF) instead of a ROM sample, so
-    the noise bandwidth tracks osc_fc the same way the tone pitch does."""
-    entries = [Entry(fc_for_freq(f), PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES, osc_conf=NOISE_CONF)
-               for f in tone_freqs()]
-    return Block("Noise", "3", TONE_COUNT, TONE_FRAMES, 1, "aqua", "m", entries)
-
-
 def build_blocks() -> List[Block]:
     """The ordered block list — drives both the script and the profile."""
     return [
@@ -222,8 +211,6 @@ def build_blocks() -> List[Block]:
         _tone_block(),
         _silence_block("Silence", 0),
         _pan_block(),
-        _silence_block("Silence", 0),
-        _noise_block(),
         _silence_block("Silence", 0),
         _sync_block("Sync", 0),
     ]
@@ -290,8 +277,6 @@ def describe() -> str:
         f"tones           : {TONE_COUNT} semitones {tone_freqs()[0]:.1f}..{tone_freqs()[-1]:.1f} Hz, "
         f"fc {fc_for_freq(tone_freqs()[0])}..{fc_for_freq(tone_freqs()[-1])}, {TONE_FRAMES} frames each",
         f"pan sweep       : {PAN_FREQ:.0f} Hz, {PAN_STEPS} steps {pan_values()}, {PAN_FRAMES} frames each",
-        f"noise sweep     : fmt=3 (conf=0x{NOISE_CONF:02x}), same fc as tones, "
-        f"{TONE_COUNT} steps, {TONE_FRAMES} frames each",
         f"script entries  : {len(script)} / {MDF_MAX_ENTRIES}",
         f"total           : {total_frames(blocks)} frames, {total_samples(blocks)} samples, "
         f"{total_samples(blocks)/SAMPLE_RATE:.2f} s",
