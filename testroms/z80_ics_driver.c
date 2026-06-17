@@ -442,10 +442,18 @@ static void clear_irq_log(void)
 #define MDF_VOICE_A 0
 #define MDF_VOICE_B 1
 
+/* Pre-roll: hold silence for ~4 s after MDF_START before entry 0 plays, so the
+   external audio capture is fully running before the (sync-pulse) start.  240
+   timer-0 ticks ~= 4.0 s at the ~59.9 Hz MDFourier frame rate.  This is pre-roll
+   only -- not part of the profile; the analyzer aligns on the sync pulses, so
+   leading silence is ignored (but the host capture must run ~4 s longer). */
+#define MDF_START_DELAY_FRAMES 240
+
 static volatile u8  mdf_running;
 static volatile u16 mdf_count;
 static volatile u16 mdf_index;
 static volatile u16 mdf_remaining;
+static volatile u16 mdf_delay;  /* pre-roll ticks remaining before entry 0 starts */
 static volatile u8  mdf_cur;    /* voice currently sounding the active entry */
 static volatile u8  mdf_next;   /* voice pre-staged with the upcoming entry */
 
@@ -515,12 +523,33 @@ static void mdf_rampdown(u8 voice)
     ics_write_reg(voice, 0x0d, Z80_ICS_WIDTH_UPPER8, 0x40);
 }
 
+/* Start entry 0 after the pre-roll delay: stage + key it on (the first sync
+   pulse, ACT_ON) and pre-stage entry 1.  mdf_cur/next/index were set by
+   mdf_start before the delay. */
+static void mdf_begin_entry0(void)
+{
+    u8 act0 = mdf_entry_act(0);
+    mdf_stage(mdf_cur, 0);
+    if (act0 == Z80_ICS_MDF_ACT_ON || act0 == Z80_ICS_MDF_ACT_ON_RAMP)
+        mdf_keyon_entry(mdf_cur, 0);
+    mdf_remaining = mdf_entry_ticks(0);
+    if (mdf_count > 1)
+        mdf_stage(mdf_next, 1);
+}
+
 /* Called from the timer-0 IRQ once per tick while a sequence is running. */
 static void mdf_tick(void)
 {
     u8 t;
     if (!mdf_running)
         return;
+    /* Pre-roll: hold silence for MDF_START_DELAY_FRAMES ticks, then begin. */
+    if (mdf_delay)
+    {
+        if (--mdf_delay == 0)
+            mdf_begin_entry0();
+        return;
+    }
     if (mdf_remaining)
         mdf_remaining--;
     if (mdf_remaining != 0)
@@ -586,18 +615,17 @@ static void mdf_start(u16 value)
     mdf_index = 0;
     mdf_cur = MDF_VOICE_A;
     mdf_next = MDF_VOICE_B;
+    mdf_remaining = 0;
     if (mdf_count)
     {
-        mdf_stage(mdf_cur, 0);                  /* entry 0 onto the first voice */
-        if (mdf_entry_act(0) != Z80_ICS_MDF_ACT_OFF)
-            mdf_keyon_entry(mdf_cur, 0);
-        mdf_remaining = mdf_entry_ticks(0);
-        if (mdf_count > 1)
-            mdf_stage(mdf_next, 1);             /* pre-stage entry 1 */
+        /* Defer entry 0 by a pre-roll of silence; mdf_tick starts the sequence
+           when mdf_delay hits 0 (see MDF_START_DELAY_FRAMES). */
+        mdf_delay = MDF_START_DELAY_FRAMES;
         mdf_running = 1;
     }
     else
     {
+        mdf_delay = 0;
         mdf_running = 0;
     }
 }

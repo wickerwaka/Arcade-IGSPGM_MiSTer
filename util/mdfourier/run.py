@@ -144,7 +144,8 @@ def main() -> int:
     sig.configure(short=args.short)
     script = sig.build_script()
     n_signal = sig.total_samples()
-    n_capture = n_signal + int(args.margin * sig.SAMPLE_RATE)
+    # +pre-roll: the test ROM delays the sequence start by START_DELAY frames.
+    n_capture = sig.START_DELAY_SAMPLES + n_signal + int(args.margin * sig.SAMPLE_RATE)
 
     print(f"target={args.target} entries={len(script)} signal={n_signal} samples "
           f"({n_signal / sig.SAMPLE_RATE:.2f}s) capture={n_capture}")

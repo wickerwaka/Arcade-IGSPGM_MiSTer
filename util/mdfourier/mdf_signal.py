@@ -50,6 +50,14 @@ SAMPLES_PER_FRAME = TIMER_PERIOD_CLOCKS / OUTPUT_DIV         # 522.0
 FRAME_MS = TIMER_PERIOD_CLOCKS / ICS_CLK * 1000.0           # ~16.6893
 FRAME_RATE = ICS_CLK / TIMER_PERIOD_CLOCKS                  # ~59.918 Hz
 
+# Pre-roll: the test ROM holds silence for this many timer-0 ticks after
+# MDF_START before entry 0 plays, so the capture is running before the start.
+# MUST match MDF_START_DELAY_FRAMES in testroms/z80_ics_driver.c.  It is NOT in
+# the profile (the analyzer aligns on the sync pulses, so leading silence is
+# ignored) — but captures must run this much longer.
+START_DELAY_FRAMES = 240                                    # ~4.0 s at FRAME_RATE
+START_DELAY_SAMPLES = int(round(START_DELAY_FRAMES * SAMPLES_PER_FRAME))
+
 # ── Looped BIOS sample region (validated music-ROM sample area) ──────────────
 # A short sub-loop inside 0x2D640..0x3B2A0 so its repeat rate is the pitch.
 LOOP_START = 0x2D640

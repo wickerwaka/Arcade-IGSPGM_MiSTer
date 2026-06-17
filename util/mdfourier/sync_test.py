@@ -154,7 +154,8 @@ def main() -> int:
 
     script = build_sync_script(args.pulses, args.pulse_frames)
     n_signal = int(round(args.pulses * 2 * args.pulse_frames * sig.SAMPLES_PER_FRAME))
-    n_capture = n_signal + int(args.margin * sig.SAMPLE_RATE)
+    # +pre-roll: the test ROM delays the sequence start by START_DELAY frames.
+    n_capture = sig.START_DELAY_SAMPLES + n_signal + int(args.margin * sig.SAMPLE_RATE)
     print(f"target={args.target} pulses={args.pulses} entries={len(script)} "
           f"signal={n_signal} samples ({n_signal/sig.SAMPLE_RATE:.2f}s) capture={n_capture}")
 
