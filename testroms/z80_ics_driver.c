@@ -505,6 +505,16 @@ static void mdf_keyoff(u8 voice)
     ics_write_reg(voice, 0x10, Z80_ICS_WIDTH_UPPER8, 0x0f);
 }
 
+/* Key off with a volume ramp DOWN instead of an abrupt osc stop: set VOL_INVERT
+   (vol_ctrl bit6) and clear VOL_DONE so the envelope ramps vol_acc from its
+   current (full) level down to vol_start (0).  The oscillator keeps running and
+   fades to silence; the voice is hard-stopped later (when the other voice keys
+   on the next tone).  Used for the tone sweep's de-popped key-off. */
+static void mdf_rampdown(u8 voice)
+{
+    ics_write_reg(voice, 0x0d, Z80_ICS_WIDTH_UPPER8, 0x40);
+}
+
 /* Called from the timer-0 IRQ once per tick while a sequence is running. */
 static void mdf_tick(void)
 {
@@ -524,16 +534,32 @@ static void mdf_tick(void)
         return;
     }
 
-    /* Time-critical: trigger the pre-staged voice (key-on first so the new
-       sample starts at minimal latency), then stop the previous one. */
-    if (mdf_entry_act(mdf_index) != Z80_ICS_MDF_ACT_OFF)
-        mdf_keyon_entry(mdf_next, mdf_index);
-    mdf_keyoff(mdf_cur);
-    t = mdf_cur; mdf_cur = mdf_next; mdf_next = t;
+    /* Key-on entries (ON / ON_RAMP) trigger the pre-staged voice and hand the
+       playing role to it (swap), hard-stopping the previous voice (already silent
+       from its ramp-down).  OFF_RAMP fades the current voice but keeps it as
+       mdf_cur and does NOT swap, so the next tone is pre-staged onto the idle
+       mdf_next (not the fading voice).  ACT_OFF hard-stops with no swap. */
+    {
+        u8 act = mdf_entry_act(mdf_index);
+        if (act == Z80_ICS_MDF_ACT_ON || act == Z80_ICS_MDF_ACT_ON_RAMP)
+        {
+            mdf_keyon_entry(mdf_next, mdf_index);
+            mdf_keyoff(mdf_cur);
+            t = mdf_cur; mdf_cur = mdf_next; mdf_next = t;
+        }
+        else if (act == Z80_ICS_MDF_ACT_OFF_RAMP)
+        {
+            mdf_rampdown(mdf_cur);
+        }
+        else /* ACT_OFF */
+        {
+            mdf_keyoff(mdf_cur);
+        }
+    }
     mdf_remaining = mdf_entry_ticks(mdf_index);
 
     /* Non-critical (after the trigger): pre-stage the following entry onto the
-       freed voice, with the whole hold to spare before the next tick. */
+       idle voice (mdf_next), with the whole hold to spare before the next tick. */
     if ((u16)(mdf_index + 1) < mdf_count)
         mdf_stage(mdf_next, (u16)(mdf_index + 1));
 }

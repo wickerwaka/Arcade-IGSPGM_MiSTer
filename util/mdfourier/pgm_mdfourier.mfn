@@ -7,7 +7,7 @@ CLK n
 [ToneLines] 7
 Sync s 1 20 0 red m
 Silence n 1 48 0 gray m
-Tones 1 72 24 1 green m
+Tones 1 72 25 2 green m
 Silence n 1 48 0 gray m
 PanSweep 2 16 24 1 yellow S
 Silence n 1 48 0 gray m

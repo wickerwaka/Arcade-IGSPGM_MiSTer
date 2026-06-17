@@ -64,7 +64,13 @@ PAN_CENTER = 0x80
 # ── Sequencer entry actions (mirror z80_ics_protocol.h) ─────────────────────
 ACT_OFF = 0          # silence (osc stopped)
 ACT_ON = 1           # key on at full volume — sharp edge (sync pulses)
-ACT_ON_RAMP = 2      # key on with a short volume ramp — de-popped (tone/pan/noise)
+ACT_ON_RAMP = 2      # key on with a short volume ramp — de-popped (tone/pan)
+ACT_OFF_RAMP = 3     # key off with a volume ramp DOWN — de-popped (tone sweep)
+
+# Tone-sweep inter-tone gap: each tone is followed by a one-frame ACT_OFF_RAMP
+# (the voice fades out via VOL_INVERT, then sits silent) before the next tone
+# keys on, so consecutive tones don't run together.
+TONE_GAP_FRAMES = 1
 
 # Volume-envelope attack ramp (applied at key-on for ACT_ON_RAMP).  The voice
 # template sets the rate (vol_incr) / mode (vmode) / window (vol_start..vol_end);
@@ -192,9 +198,17 @@ def _silence_block(name: str, cut: int) -> Block:
 
 
 def _tone_block() -> Block:
-    entries = [Entry(fc_for_freq(f), PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES) for f in tone_freqs()]
-    # cut 1 frame so the ~0.5-frame attack ramp is skipped by the analyzer.
-    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES, 1, "green", "m", entries)
+    # Each tone: key-on ramp up + hold (TONE_FRAMES), then a ramp-down key-off +
+    # 1-frame gap (TONE_GAP_FRAMES) before the next tone keys on.
+    entries = []
+    for f in tone_freqs():
+        fc = fc_for_freq(f)
+        entries.append(Entry(fc, PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES))
+        entries.append(Entry(fc, PAN_CENTER, ACT_OFF_RAMP, TONE_GAP_FRAMES))
+    # element = tone + gap; cut skips the attack ramp at the start and the
+    # ramp-down/gap at the end so only the steady tone is analyzed.
+    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES + TONE_GAP_FRAMES,
+                 TONE_GAP_FRAMES + 1, "green", "m", entries)
 
 
 def _pan_block() -> Block:

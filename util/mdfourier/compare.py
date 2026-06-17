@@ -75,7 +75,10 @@ def element_windows():
             start = int(round(frame * spf))
             frame += e.ticks
             end = int(round(frame * spf))
-            if e.action != sig.ACT_ON:
+            # analyze key-on entries (sharp ACT_ON and ramped ACT_ON_RAMP);
+            # skip silence/gap entries (ACT_OFF / ACT_OFF_RAMP). The per-tone
+            # window is the tone entry only, so it excludes the trailing gap.
+            if e.action not in (sig.ACT_ON, sig.ACT_ON_RAMP):
                 continue
             if b.name == "Tones":
                 freq = e.fc * sig.SAMPLE_RATE / (1024 * sig.LOOP_LEN)

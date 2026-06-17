@@ -68,6 +68,7 @@ typedef signed long s32;
 #define Z80_ICS_MDF_ACT_OFF      0 /* osc_ctl = 0x0f -> output forced to silence  */
 #define Z80_ICS_MDF_ACT_ON       1 /* key on at full volume (sharp, e.g. sync)    */
 #define Z80_ICS_MDF_ACT_ON_RAMP  2 /* key on with a short volume ramp (de-popped) */
+#define Z80_ICS_MDF_ACT_OFF_RAMP 3 /* key off with a volume ramp DOWN (de-popped) */
 
 /* 8 bytes: fc_hi fc_lo pan osc_conf action reserved ticks_hi ticks_lo */
 #define Z80_ICS_MDF_ENTRY_SIZE 8
