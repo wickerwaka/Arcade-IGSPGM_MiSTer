@@ -801,13 +801,17 @@ module ics2115
                         reg_select < 8'h40 && reg_select[4:0] == 5'h0F &&
                         irqv_rr_found;
 
+    // Timer IRQ ack: hardware clears pending only on a full 16-bit preset
+    // read (a high-byte read immediately following a low-byte read of the
+    // same register); lone lo8 or hi8 reads do not ack.
     logic [7:0] prev_rd_reg;
     logic       prev_rd_was_lo;
     logic timer_irq_clear_next [0:1];
     always_comb begin
         timer_irq_clear_next[0] = 1'b0;
         timer_irq_clear_next[1] = 1'b0;
-        if (host_rd_done_pulse && (host_addr == 2'd2 || host_addr == 2'd3)) begin
+        if (host_rd_done_pulse && host_addr == 2'd3 &&
+            prev_rd_was_lo && prev_rd_reg == reg_select) begin
             if (reg_select == 8'h40)
                 timer_irq_clear_next[0] = 1'b1;
             else if (reg_select == 8'h41)
@@ -1210,7 +1214,8 @@ module ics2115
 
             if (host_voice_wr_apply) begin
                 osc_irq_en[host_voice_wr_voice] <= host_voice_wr_data.osc_conf[OSC_IRQ];
-                osc_irq_pending[host_voice_wr_voice] <= osc_irq_pending[host_voice_wr_voice] | host_voice_wr_data.osc_conf[OSC_IRQ_PEND];
+                osc_irq_pending[host_voice_wr_voice] <= osc_irq_pending[host_voice_wr_voice]
+                    | (host_voice_wr_data.osc_conf[OSC_IRQ_PEND] & host_voice_wr_data.osc_conf[OSC_IRQ]);
                 vol_irq_en[host_voice_wr_voice] <= host_voice_wr_data.vol_ctrl[VOL_IRQ];
                 // vol pends are NOT host-settable (hardware: VCtl bit7 writes
                 // latch nothing; only real envelope events pend)
