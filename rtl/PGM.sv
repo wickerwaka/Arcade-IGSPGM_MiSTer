@@ -83,42 +83,16 @@ module PGM(
 
 wire clk = clk_50m;
 
-ddr_if ddr_ss(), ddr_arm(), ddr_prot(), ddr_iram(), ddr_share0(), ddr_share1(),
-       ddr_lo(), ddr_lo2(), ddr_lo3(), ddr_lo4();
+ddr_if ddr_ss(), ddr_igs027a(), ddr_prot(), ddr_cpu();
 
-// DDR arbitration (priority: savestates > external ARM ROM > protection ROM
-// cache > internal RAM cache > shared-RAM chip caches).  Each protection memory
-// has its own cache so they never thrash each other (exrom 8MB, internal ROM,
-// iram, 2x shared-RAM chips).  The sprite A-ROM moved to SDRAM (ch5).
-ddr_mux ddr_mux_hi(
+
+ddr_mux4 ddr_mux_main(
     .clk,
     .x(ddr),
-    .a(ddr_ss),
-    .b(ddr_lo)
-);
-ddr_mux ddr_mux_lo(
-    .clk,
-    .x(ddr_lo),
-    .a(ddr_arm),
-    .b(ddr_lo2)
-);
-ddr_mux ddr_mux_lo2(
-    .clk,
-    .x(ddr_lo2),
-    .a(ddr_prot),
-    .b(ddr_lo3)
-);
-ddr_mux ddr_mux_lo3(
-    .clk,
-    .x(ddr_lo3),
-    .a(ddr_iram),
-    .b(ddr_lo4)
-);
-ddr_mux ddr_mux_lo4(
-    .clk,
-    .x(ddr_lo4),
-    .a(ddr_share0),
-    .b(ddr_share1)
+    .a(ddr_cpu),
+    .b(ddr_ss),
+    .c(ddr_igs027a),
+    .d(ddr_prot)
 );
 
 /////////////////////////////
@@ -444,8 +418,8 @@ always_ff @(posedge clk) begin
     ce_cpu_180 <= 0;
 
     // Defer the 68k while a shared-RAM access is stalled on a DDR cache miss
-    // (igs027a_share_ready=0), the same way the ROM path stalls via sdr_cpu sync.
-    if (sdr_cpu_req == sdr_cpu_ack && clocks_enabled && igs027a_share_ready) begin
+    // (igs027a_share_ready=0), the same way the ROM path stalls via cpu_rom_busy.
+    if (~cpu_rom_busy && clocks_enabled && igs027a_share_ready) begin
         if (ce_cpu_count[10:1] != ce_steady_count) begin
             ce_cpu <= ~ce_cpu_count[0];
             ce_cpu_180 <= ce_cpu_count[0];
@@ -1101,10 +1075,7 @@ igs027a #(
     .cache_be(a27_cache_be),
     .cache_rdata(prot_cache_rdata),
     .cache_ready(prot_cache_ready),
-    .ddr(ddr_arm),
-    .ddr_iram(ddr_iram),
-    .ddr_share0(ddr_share0),
-    .ddr_share1(ddr_share1),
+    .ddr(ddr_igs027a),
     .arm_has_exrom(arm_has_exrom),
     .arm_type3(arm_type3),
     .m68k_fiq_set(arm_fiq_set),
@@ -1185,13 +1156,10 @@ reg prev_ds_n;
 wire pre_sdr_dtack_n = ~ROMn & prev_ds_n;
 wire [15:0] rom_q;
 
-rom_cache rom_cache(
+wire cpu_rom_busy;
+cpu_rom_ddr_cache cpu_rom_cache(
     .clk,
     .reset,
-    .sdr_addr(sdr_cpu_addr),
-    .sdr_data(sdr_cpu_q),
-    .sdr_req(sdr_cpu_req),
-    .sdr_ack(sdr_cpu_ack),
 
     .cart_present,
     .cart_base_addr(cart_prog_base[23:1]),
@@ -1199,8 +1167,17 @@ rom_cache rom_cache(
     .as_n(ROMn | cpu_as_n),
     .dtack_n(sdr_dtack_n),
     .cpu_addr(cpu_addr),
-    .data(rom_q)
+    .data(rom_q),
+    .busy(cpu_rom_busy),
+
+    .ddr(ddr_cpu)
 );
+
+// 68k program ROM no longer uses SDRAM; keep the ch3 CPU client idle.
+always_comb begin
+    sdr_cpu_addr = 27'd0;
+    sdr_cpu_req  = 1'b0;
+end
 
 always_ff @(posedge clk) begin
     prev_ds_n <= cpu_as_n;

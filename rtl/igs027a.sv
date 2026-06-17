@@ -45,10 +45,7 @@ module igs027a #(
     input  logic [31:0] cache_rdata,
     input  logic        cache_ready,
 
-    ddr_if.to_host      ddr,
-    ddr_if.to_host      ddr_iram,
-    ddr_if.to_host      ddr_share0,     // 68k/ARM shared RAM chip0 cache (DDR)
-    ddr_if.to_host      ddr_share1,     // 68k/ARM shared RAM chip1 cache (DDR)
+    ddr_if.to_host      ddr,            // single DDR host: exrom/iram/share caches muxed internally
     input  logic        arm_has_exrom,  // 1 = game has an external ARM ROM in DDR (type2/3)
     input  logic        arm_type3,      // 1 = type3 (55857G): banked share, swapped latch/share map
     input  logic        m68k_fiq_set,   // 68k wrote the type2 latch (asserts FIQ)
@@ -59,6 +56,16 @@ module igs027a #(
     output logic [31:0] dbg_pc,
     output logic [31:0] dbg_cpsr
 );
+
+    ddr_if ddr_exrom(), ddr_iram_i(), ddr_share0_i(), ddr_share1_i();
+    ddr_mux4 igs027a_ddr_mux(
+        .clk,
+        .x(ddr),
+        .a(ddr_exrom),
+        .b(ddr_iram_i),
+        .c(ddr_share0_i),
+        .d(ddr_share1_i)
+    );
 
     wire [31:0] arm_addr /* verilator public_flat */;
     wire [31:0] arm_rdata_dbg /* verilator public_flat */;
@@ -206,11 +213,12 @@ module igs027a #(
 
     wire [31:0] exrom_raw;
     wire        exrom_ready;
-    arm_rom_cache #(.ADDR_BITS(23), .DDR_BASE(CART_ARM_ROM_DDR_BASE)) exrom_cache (
+    ddr_rom_cache #(.DATA_WIDTH(32), .ADDR_BITS(23), .CACHE_LINES(128),
+                    .LINE_BYTES(32), .DDR_BASE(CART_ARM_ROM_DDR_BASE)) exrom_cache (
         .clk(clk), .reset(reset),
         .addr(arm_addr[22:0]), .req(sel_exrom),
         .rdata(exrom_raw), .ready(exrom_ready),
-        .ddr(ddr)
+        .ddr(ddr_exrom)
     );
 
     // type1/2: external_rom_r = rom ^ xor_table[off&0xff] (runtime xortab).
@@ -356,7 +364,7 @@ module igs027a #(
         .wr_req(ramc_wr_req),
         .wr_addr(ramc_wr_addr),
         .wr_data(ramc_wr_data), .wr_be(ramc_wr_be), .wr_ready(ramc_wr_ready),
-        .ddr(ddr_iram)
+        .ddr(ddr_iram_i)
     );
 
     always_ff @(posedge clk) begin
@@ -468,7 +476,7 @@ module igs027a #(
         .m68k_q(c0_m68k_q), .m68k_ready(c0_m68k_rdy),
         .ss_rd(ss_sh_rd & ~ss_chip), .ss_wr(ss_sh_wr & ~ss_chip),
         .ss_off(ss_off), .ss_wdata(ssbus_share.data[31:0]), .ss_q(c0_ss_q), .ss_ready(c0_ss_rdy),
-        .ddr(ddr_share0)
+        .ddr(ddr_share0_i)
     );
     share_cache #(.CHIP_BASE(PROT_SHARE_DDR_BASE + 32'h0001_0000)) chip1 (
         .clk(clk), .reset(reset),
@@ -480,7 +488,7 @@ module igs027a #(
         .m68k_q(c1_m68k_q), .m68k_ready(c1_m68k_rdy),
         .ss_rd(ss_sh_rd & ss_chip), .ss_wr(ss_sh_wr & ss_chip),
         .ss_off(ss_off), .ss_wdata(ssbus_share.data[31:0]), .ss_q(c1_ss_q), .ss_ready(c1_ss_rdy),
-        .ddr(ddr_share1)
+        .ddr(ddr_share1_i)
     );
 
     // ARM read result + readiness (non-target chip is idle -> ready=1)

@@ -47,7 +47,6 @@ module rom_loader
 
 
 reg [31:0] base_addr;
-reg reorder_64;
 reg [31:0] offset;
 reg [31:0] size;
 region_encoding_t encoding;
@@ -84,23 +83,20 @@ assign ddr.burstcnt = 1;
 assign ddr.read = 0;
 assign ddr.byteenable = 8'hff;
 
-wire [15:0] sdr_word_enc = (encoding == ENCODING_SWAP16) ? {sdr_buffer[7:0], ioctl_data}
-                                                         : {ioctl_data, sdr_buffer[7:0]};
+
+wire [15:0] word_in = {ioctl_data, sdr_buffer[7:0]};
 wire [22:0] prog_word_addr = 23'h080000 + {1'b0, offset[22:1]}; // 68k word addr (cart @0x100000)
-wire [15:0] prog_dec;
+
+wire [15:0] prog_dec, arm_dec;
 rom_decrypt rom_decrypt_load(
     .game(board_cfg.game), .word_addr(prog_word_addr),
-    .rom_word_in(sdr_word_enc), .rom_word_out(prog_dec));
-wire [15:0] sdr_store = (encoding == ENCODING_ENCRYPTED) ? prog_dec : sdr_word_enc;
+    .rom_word_in(word_in), .rom_word_out(prog_dec));
+exrom_decrypt exrom_decrypt_load(
+    .game(board_cfg.game), .word_idx(offset[22:1]),
+    .word_in(word_in), .word_out(arm_dec));
 
-// ARM external ROM: decrypt the four 16-bit lanes of the pending 64-bit word.
-reg  [21:0] ddr_woff;   // base 16-bit word index of the pending DDR word
-wire [15:0] exd0, exd1, exd2, exd3;
-exrom_decrypt exd_0(.game(board_cfg.game), .word_idx(ddr_woff),          .word_in(ddr_buffer[15:0]),  .word_out(exd0));
-exrom_decrypt exd_1(.game(board_cfg.game), .word_idx(ddr_woff + 22'd1),  .word_in(ddr_buffer[31:16]), .word_out(exd1));
-exrom_decrypt exd_2(.game(board_cfg.game), .word_idx(ddr_woff + 22'd2),  .word_in(ddr_buffer[47:32]), .word_out(exd2));
-exrom_decrypt exd_3(.game(board_cfg.game), .word_idx(ddr_woff + 22'd3),  .word_in(ddr_buffer[63:48]), .word_out(exd3));
-wire [63:0] ddr_store = (encoding == ENCODING_ENCRYPTED) ? {exd3, exd2, exd1, exd0} : ddr_buffer;
+wire [15:0] word_store = (encoding == ENCODING_PROG) ? prog_dec :
+                         (encoding == ENCODING_ARM)  ? arm_dec  : word_in;
 
 always @(posedge sys_clk) begin
     ddr.acquire <= 0;
@@ -144,7 +140,7 @@ always @(posedge sys_clk) begin
             offset <= offset + 1;
             if (offset[0] == 1'b1) begin
                 sdr_addr <= { base_addr[26:0] + {offset[26:1], 1'b0} };
-                sdr_data <= sdr_store;   // NORMAL byte order, decrypted if base_idx==1
+                sdr_data <= word_store;
                 sdr_be <= 2'b11;
                 sdr_rw <= 0; // write
                 sdr_req <= ~sdr_req;
@@ -163,13 +159,20 @@ always @(posedge sys_clk) begin
                     stage <= SDR_DATA;
             end
         end
-        DDR_DATA: if (ioctl_wr) begin // FIXME: SWAP16
-            ddr_buffer[55:0] <= ddr_buffer[63:8];
-            ddr_buffer[63:56] <= ioctl_data;
+        DDR_DATA: if (ioctl_wr) begin
+
             offset <= offset + 1;
+            sdr_buffer[7:0] <= ioctl_data;
+            if (offset[0]) begin
+                case (offset[2:1])
+                    2'd0: ddr_buffer[15:0]  <= word_store;
+                    2'd1: ddr_buffer[31:16] <= word_store;
+                    2'd2: ddr_buffer[47:32] <= word_store;
+                    2'd3: ddr_buffer[63:48] <= word_store;
+                endcase
+            end
             if (offset[2:0] == 3'b111) begin
                 ddr.addr <= base_addr[31:0] + { 5'd0, offset[26:3], 3'd0 };
-                ddr_woff <= {offset[26:3], 2'b00};   // base 16-bit word index (4*group)
                 ddr.write <= 0;
                 ddr.acquire <= 1;
                 ioctl_wait <= 1;
@@ -179,7 +182,7 @@ always @(posedge sys_clk) begin
         DDR_DATA_WRITE: begin
             ddr.acquire <= 1;
             if (~ddr.busy) begin
-                ddr.wdata <= ddr_store;   // decrypted if base_idx==10 (ARM ext ROM)
+                ddr.wdata <= ddr_buffer;
                 ddr.write <= 1;
                 stage <= DDR_DATA_WAIT;
             end

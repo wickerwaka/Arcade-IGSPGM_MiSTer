@@ -491,27 +491,16 @@ sdram sdram
     .ch5_ack(sdr_ch5_ack)
 );
 
-ddr_if ddr_host(), ddr_romload(), ddr_x(), ddr_romload_adaptor(), ddr_romload_loader(), ddr_f2(), ddr_rotate();
+ddr_if ddr_host(), ddr_romload_adaptor(), ddr_romload_loader(), ddr_f2(), ddr_rotate();
 
-ddr_mux ddr_mux(
+// One 4-way mux (priority: PGM core > video rotate > ROM-load adaptor > loader).
+ddr_mux4 ddr_mux(
     .clk(clk_sys),
     .x(ddr_host),
     .a(ddr_f2),
-    .b(ddr_x)
-);
-
-ddr_mux ddr_mux2(
-    .clk(clk_sys),
-    .x(ddr_romload),
-    .a(ddr_romload_adaptor),
-    .b(ddr_romload_loader)
-);
-
-ddr_mux ddr_mux3(
-    .clk(clk_sys),
-    .x(ddr_x),
-    .a(ddr_rotate),
-    .b(ddr_romload)
+    .b(ddr_rotate),
+    .c(ddr_romload_adaptor),
+    .d(ddr_romload_loader)
 );
 
 wire rom_load_busy;

@@ -90,13 +90,38 @@ void AddRomZip(const std::string &name)
     gFileSearch.AddSearchPath(RomPath(name + ".zip"));
 }
 
+// 68k program ROM now lives in DDR (read back by the RTL cpu_rom_ddr_cache).
+// Callers still pass the legacy SDR base as the logical region offset; these
+// helpers map it to the DDR base and write the already word-swapped + decrypted
+// bytes there, byte-for-byte (the cache reads them little-endian as the 68k word).
+static uint32_t ProgDdrBase(uint32_t sdrBase)
+{
+    if (sdrBase >= CART_PROG_ROM_SDR_BASE)
+        return CART_PROG_ROM_DDR_BASE + (sdrBase - CART_PROG_ROM_SDR_BASE);
+    return BIOS_PROG_ROM_DDR_BASE + (sdrBase - BIOS_PROG_ROM_SDR_BASE);
+}
+static bool WriteProgToDdr(const std::vector<uint8_t> &prog, uint32_t sdrBase)
+{
+    return gSimCore.mDDRMemory->LoadData(prog, ProgDdrBase(sdrBase), 1);
+}
+static bool LoadProgFileToDdr(const char *name, uint32_t sdrBase)
+{
+    std::vector<uint8_t> buf;
+    if (!gFileSearch.LoadFile(name, buf))
+    {
+        printf("Failed to find file: %s\n", name);
+        return false;
+    }
+    return WriteProgToDdr(buf, sdrBase);
+}
+
 bool LoadBasePgmBios()
 {
     AddRomZip("pgm");
 
     // BIOS 68k program: NORMAL byte order (raw).  PGM program ROMs are WORD_SWAP
     // so a little-endian SDRAM read yields the 68k word; no load-time swap.
-    if (!gSimCore.mSDRAM->LoadData("pgm_p02s.u20", BIOS_PROG_ROM_SDR_BASE, 1))
+    if (!LoadProgFileToDdr("pgm_p02s.u20", BIOS_PROG_ROM_SDR_BASE))
         return false;
     if (!gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1))
         return false;
@@ -169,7 +194,7 @@ bool LoadPgmEntry(const std::vector<uint8_t> &buffer, const char *name, const Pg
             prog[i + 0] = (i + 1 < entry.size) ? buffer[entry.offset + i + 1] : 0;
             prog[i + 1] = buffer[entry.offset + i + 0];
         }
-        gSimCore.mSDRAM->Write(destBase, static_cast<uint32_t>(prog.size()), prog.data());
+        WriteProgToDdr(prog, destBase);
     }
     else
     {
@@ -625,8 +650,8 @@ bool LoadProgRom(Game game, const char *name, uint32_t crc, uint32_t destBase,
     const uint32_t wordBase = (destBase - CART_PROG_ROM_SDR_BASE) / 2; // region word offset
     Decrypt68kProg(game, prog, wordBase);
 
-    gSimCore.mSDRAM->Write(destBase, static_cast<uint32_t>(prog.size()), prog.data());
-    printf("Loaded %zu bytes (NORMAL) from %s offset 0x%zx to SDRAM 0x%08X\n", prog.size(), name, fileOffset, destBase);
+    WriteProgToDdr(prog, destBase);
+    printf("Loaded %zu bytes (NORMAL) from %s offset 0x%zx to DDR 0x%08X\n", prog.size(), name, fileOffset, ProgDdrBase(destBase));
     return true;
 }
 
@@ -739,7 +764,7 @@ static void LoadTestbios()
 {
     AddRomZip("pgm");
 
-    gSimCore.mSDRAM->LoadData("testbios.bin", BIOS_PROG_ROM_SDR_BASE, 1);
+    LoadProgFileToDdr("testbios.bin", BIOS_PROG_ROM_SDR_BASE);
     gSimCore.mSDRAM->LoadData("pgm_t01s.rom", BIOS_TILE_ROM_SDR_BASE, 1);
 
     ClearCartConfig();
@@ -755,7 +780,7 @@ static void LoadEspgalbl()
     AddRomZip("espgalbl");
     AddRomZip("espgal");
 
-    gSimCore.mSDRAM->LoadData("espgaluda_u8.bin", CART_PROG_ROM_SDR_BASE, 1);
+    LoadProgFileToDdr("espgaluda_u8.bin", CART_PROG_ROM_SDR_BASE);
     gSimCore.mSDRAM->LoadData("cave_t04801w064.u19", CART_TILE_ROM_SDR_BASE, 1);
     gSimCore.mSDRAM->LoadData("cave_b04801w064.u1", CART_B_ROM_SDR_BASE, 1);
     gSimCore.mSDRAM->LoadData("cave_w04801b032.u17", CART_MUSIC_ROM_SDR_BASE, 1);
@@ -950,10 +975,9 @@ static void LoadDrgw3()
                 prog[2 * k + 1] = uEven[k]; // high byte
             }
             Decrypt68kProg(GAME_DRGW3, prog);
-            gSimCore.mSDRAM->Write(CART_PROG_ROM_SDR_BASE,
-                                   static_cast<uint32_t>(prog.size()), prog.data());
-            printf("Loaded %zu bytes interleaved+decrypted drgw3 program to SDRAM 0x%08X\n",
-                   prog.size(), CART_PROG_ROM_SDR_BASE);
+            WriteProgToDdr(prog, CART_PROG_ROM_SDR_BASE);
+            printf("Loaded %zu bytes interleaved+decrypted drgw3 program to DDR 0x%08X\n",
+                   prog.size(), CART_PROG_ROM_DDR_BASE);
         }
     }
 
@@ -996,10 +1020,9 @@ static void LoadDwex()
                 prog[2 * k + 1] = uEven[k]; // high byte
             }
             Decrypt68kProg(GAME_DRGW3, prog);
-            gSimCore.mSDRAM->Write(CART_PROG_ROM_SDR_BASE,
-                                   static_cast<uint32_t>(prog.size()), prog.data());
-            printf("Loaded %zu bytes interleaved+decrypted dwex program to SDRAM 0x%08X\n",
-                   prog.size(), CART_PROG_ROM_SDR_BASE);
+            WriteProgToDdr(prog, CART_PROG_ROM_SDR_BASE);
+            printf("Loaded %zu bytes interleaved+decrypted dwex program to DDR 0x%08X\n",
+                   prog.size(), CART_PROG_ROM_DDR_BASE);
         }
     }
 

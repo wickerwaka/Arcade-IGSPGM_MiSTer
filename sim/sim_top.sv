@@ -84,20 +84,24 @@ wire [15:0] sdr_rom_data;
 
 
 
-ddr_if ddr_host(), ddr_romload(), ddr_x(), ddr_romload_adaptor(), ddr_romload_loader(), ddr_pgm();
+ddr_if ddr_host(), ddr_romload_adaptor(), ddr_romload_loader(), ddr_pgm(), ddr_unused();
 
-ddr_mux ddr_mux(
+// Unused 4th mux input (kept out of arbitration).
+assign ddr_unused.acquire    = 1'b0;
+assign ddr_unused.read       = 1'b0;
+assign ddr_unused.write      = 1'b0;
+assign ddr_unused.addr       = 32'd0;
+assign ddr_unused.wdata      = 64'd0;
+assign ddr_unused.burstcnt   = 8'd0;
+assign ddr_unused.byteenable = 8'd0;
+
+ddr_mux4 ddr_mux(
     .clk(clk),
     .x(ddr_host),
     .a(ddr_pgm),
-    .b(ddr_romload)
-);
-
-ddr_mux ddr_mux2(
-    .clk(clk),
-    .x(ddr_romload),
-    .a(ddr_romload_adaptor),
-    .b(ddr_romload_loader)
+    .b(ddr_romload_adaptor),
+    .c(ddr_romload_loader),
+    .d(ddr_unused)
 );
 
 assign ddr_addr = ddr_host.addr;

@@ -113,8 +113,9 @@ void SimCore::Init()
     SetMemory(MemoryRegion::AUDIO_RAM, UNIQUE_MEMORY_16B(aram, 64 * 1024));
     SetMemory(MemoryRegion::VIDEO_RAM, UNIQUE_MEMORY_8B(vram, 32 * 1024));
     SetMemory(MemoryRegion::PALETTE_RAM, UNIQUE_MEMORY_16B(palram, 8 * 1024));
-    SetMemory(MemoryRegion::BIOS_PROG_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_PROG_ROM_SDR_BASE, 1024 * 1024));
-    SetMemory(MemoryRegion::CART_PROG_ROM, std::make_unique<MemorySlice>(*mSDRAM, CART_PROG_ROM_SDR_BASE, 16 * 1024 * 1024));
+    // 68k program ROM now lives in DDR (read back by the RTL cpu_rom_ddr_cache).
+    SetMemory(MemoryRegion::BIOS_PROG_ROM, std::make_unique<MemorySlice>(*mDDRMemory, BIOS_PROG_ROM_DDR_BASE, 1024 * 1024));
+    SetMemory(MemoryRegion::CART_PROG_ROM, std::make_unique<MemorySlice>(*mDDRMemory, CART_PROG_ROM_DDR_BASE, 8 * 1024 * 1024));
     SetMemory(MemoryRegion::BIOS_TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_TILE_ROM_SDR_BASE, 2 * 1024 * 1024));
     SetMemory(MemoryRegion::BIOS_MUSIC_ROM, std::make_unique<MemorySlice>(*mSDRAM, BIOS_MUSIC_ROM_SDR_BASE, 2 * 1024 * 1024));
     SetMemory(MemoryRegion::CART_TILE_ROM, std::make_unique<MemorySlice>(*mSDRAM, CART_TILE_ROM_SDR_BASE, 32 * 1024 * 1024));

@@ -22,6 +22,10 @@ package system_consts;
     // Free DDR window (was the sprite A-ROM, now moved to SDRAM).
     parameter bit [31:0] CART_A_ROM_DDR_BASE = 32'h3800_0000;
     parameter bit [31:0] DOWNLOAD_DDR_BASE   = 32'h3000_0000;
+    // 68k program ROM moved off SDRAM onto DDR (fronted by cpu_rom_ddr_cache).  9MB
+    // laid out contiguously - BIOS 1MB then CART 8MB - so the CPU cache is one tag space.
+    parameter bit [31:0] BIOS_PROG_ROM_DDR_BASE = 32'h3A00_0000; // 1MB
+    parameter bit [31:0] CART_PROG_ROM_DDR_BASE = 32'h3A10_0000; // 8MB (= BIOS_DDR + 0x100000)
     parameter bit [31:0] CART_ARM_ROM_DDR_BASE = 32'h3C00_0000;
     parameter bit [31:0] PROT_INT_ROM_DDR_BASE = 32'h3C90_0000; // igs027a 16KB internal ROM
     parameter bit [31:0] PROT_IRAM_DDR_BASE    = 32'h3CA0_0000; // igs027a internal RAM, up to 256KB (P2)
@@ -62,10 +66,13 @@ package system_consts;
         STORAGE_BLOCK
     } region_storage_t;
 
+    // How the loader transforms each assembled 16-bit word.  This is purely a
+    // function of the data (game + encoding); it is independent of whether the
+    // word lands in SDR or DDR.
     typedef enum bit [3:0] {
-        ENCODING_NORMAL,
-        ENCODING_SWAP16,
-        ENCODING_ENCRYPTED
+        ENCODING_NORMAL,      // raw, no transform
+        ENCODING_PROG,        // 68k CART program: rom_decrypt
+        ENCODING_ARM          // ARM external ROM: exrom_decrypt
     } region_encoding_t;
 
     typedef struct packed {
@@ -76,17 +83,17 @@ package system_consts;
     } region_t;
 
 
-    parameter region_t REGION_BIOS_PROG_ROM      = '{ base_addr:BIOS_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0 };
+    parameter region_t REGION_BIOS_PROG_ROM      = '{ base_addr:BIOS_PROG_ROM_DDR_BASE,      storage:STORAGE_DDR,   encoding:ENCODING_NORMAL, base_idx:0 };
     parameter region_t REGION_BIOS_TILE_ROM      = '{ base_addr:BIOS_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0 };
     parameter region_t REGION_BIOS_MUSIC_ROM     = '{ base_addr:BIOS_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0  };
-    parameter region_t REGION_CART_PROG_ROM      = '{ base_addr:CART_PROG_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_ENCRYPTED, base_idx:1  };
+    parameter region_t REGION_CART_PROG_ROM      = '{ base_addr:CART_PROG_ROM_DDR_BASE,      storage:STORAGE_DDR,   encoding:ENCODING_PROG, base_idx:1  };
     parameter region_t REGION_CART_TILE_ROM      = '{ base_addr:CART_TILE_ROM_SDR_BASE,      storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:2  };
     parameter region_t REGION_CART_MUSIC_ROM     = '{ base_addr:CART_MUSIC_ROM_SDR_BASE,     storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:3  };
     parameter region_t REGION_CART_A_ROM         = '{ base_addr:CART_A_ROM_SDR_BASE,         storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0  };
     parameter region_t REGION_CART_B_ROM         = '{ base_addr:CART_B_ROM_SDR_BASE,         storage:STORAGE_SDR,   encoding:ENCODING_NORMAL, base_idx:0  };
     parameter region_t REGION_IGS022_ROM         = '{ base_addr:PROT_ROM_DDR_BASE,           storage:STORAGE_DDR,   encoding:ENCODING_NORMAL, base_idx:0  };
     parameter region_t REGION_IGS027_IROM        = '{ base_addr:PROT_INT_ROM_DDR_BASE,       storage:STORAGE_DDR,   encoding:ENCODING_NORMAL, base_idx:0  };
-    parameter region_t REGION_CART_ARM_ROM       = '{ base_addr:CART_ARM_ROM_DDR_BASE,       storage:STORAGE_DDR,   encoding:ENCODING_ENCRYPTED, base_idx:0 };
+    parameter region_t REGION_CART_ARM_ROM       = '{ base_addr:CART_ARM_ROM_DDR_BASE,       storage:STORAGE_DDR,   encoding:ENCODING_ARM, base_idx:0 };
 
     parameter region_t LOAD_REGIONS[11] = '{
         REGION_BIOS_PROG_ROM,

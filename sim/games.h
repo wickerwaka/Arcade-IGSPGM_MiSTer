@@ -49,6 +49,9 @@ static const uint32_t CART_MUSIC_ROM_SDR_BASE  = 0x02000000;
 static const uint32_t CART_B_ROM_SDR_BASE      = 0x03000000;
 static const uint32_t CART_A_ROM_SDR_BASE      = 0x04000000;  // sprite colour ROM (chip 1)
 static const uint32_t CART_A_ROM_DDR_BASE      = 0x38000000;  // free DDR window (was A-ROM)
+// 68k program ROM moved off SDRAM onto DDR (cpu_rom_ddr_cache); must match system_consts.sv.
+static const uint32_t BIOS_PROG_ROM_DDR_BASE   = 0x3A000000;  // 1MB
+static const uint32_t CART_PROG_ROM_DDR_BASE   = 0x3A100000;  // 8MB (= BIOS_DDR + 0x100000)
 static const uint32_t CART_ARM_ROM_DDR_BASE    = 0x3C000000;  // type2/3 external ARM ROM
 // Protection internal memories in DDR (shared prot_cache); must match system_consts.sv.
 static const uint32_t PROT_INT_ROM_DDR_BASE    = 0x3C900000;  // igs027a 16KB internal ROM

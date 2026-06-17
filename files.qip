@@ -28,7 +28,6 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/gamebub-arm/generated/Multipl
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/gamebub-arm/generated/Decoder.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/gamebub-arm/generated/Control.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/gamebub-arm/generated/ARM7TDMI.sv
-set_global_assignment -name SYSTEMVERILOG_FILE rtl/arm_rom_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/prot_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/share_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/ram_cache.sv
@@ -46,6 +45,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/audio_mix.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video_path.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video_hscale.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/rom_cache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/ddr_rom_cache.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/cpu_rom_ddr_cache.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/mame_keys.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/coin_pulse.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/video_timing.sv
