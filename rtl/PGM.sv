@@ -458,8 +458,8 @@ jtframe_frac_cen #(3) audio_cen
 (
     .clk(clk),
     .cen_in(1),
-    .n(10'd464),
-    .m(10'd685),
+    .n(10'd615),
+    .m(10'd908),
     .cen({ce_8m, ce_16m, ce_33m}),
     .cenb()
 );
