@@ -75,17 +75,14 @@ def element_windows():
             start = int(round(frame * spf))
             frame += e.ticks
             end = int(round(frame * spf))
-            # analyze key-on entries (sharp ACT_ON and ramped ACT_ON_RAMP);
-            # skip silence/gap entries (ACT_OFF / ACT_OFF_RAMP). The per-tone
-            # window is the tone entry only, so it excludes the trailing gap.
-            if e.action not in (sig.ACT_ON, sig.ACT_ON_RAMP):
+            # analyze sounding entries: sync key-ons (ACT_ON) and every tone-sweep
+            # step (ACT_ON_RAMP on tone 0, ACT_FC on the rest — the voice plays
+            # continuously, retuned per step).  Skip silence (ACT_OFF).
+            if e.action not in (sig.ACT_ON, sig.ACT_ON_RAMP, sig.ACT_FC):
                 continue
             if b.name == "Tones":
                 freq = e.fc * sig.SAMPLE_RATE / (1024 * sig.LOOP_LEN)
                 label = f"{b.name}[{i}]"
-            elif b.name == "PanSweep":
-                freq = e.fc * sig.SAMPLE_RATE / (1024 * sig.LOOP_LEN)
-                label = f"{b.name} pan=0x{e.pan:02x}"
             else:
                 freq = sig.SYNC_FREQ
                 label = b.name

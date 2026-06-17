@@ -563,11 +563,11 @@ static void mdf_tick(void)
         return;
     }
 
-    /* Key-on entries (ON / ON_RAMP) trigger the pre-staged voice and hand the
-       playing role to it (swap), hard-stopping the previous voice (already silent
-       from its ramp-down).  OFF_RAMP fades the current voice but keeps it as
-       mdf_cur and does NOT swap, so the next tone is pre-staged onto the idle
-       mdf_next (not the fading voice).  ACT_OFF hard-stops with no swap. */
+    /* ON / ON_RAMP: trigger the pre-staged voice and hand it the playing role
+       (swap), hard-stopping the previous voice.  ACT_FC: just retune the playing
+       voice (osc_fc only) — the continuous tone sweep changes pitch with no
+       key-on/off, so no host write races the sequencer.  ACT_OFF hard-stops.
+       (ACT_OFF_RAMP is legacy/unused.)  No swap except on key-on. */
     {
         u8 act = mdf_entry_act(mdf_index);
         if (act == Z80_ICS_MDF_ACT_ON || act == Z80_ICS_MDF_ACT_ON_RAMP)
@@ -575,6 +575,11 @@ static void mdf_tick(void)
             mdf_keyon_entry(mdf_next, mdf_index);
             mdf_keyoff(mdf_cur);
             t = mdf_cur; mdf_cur = mdf_next; mdf_next = t;
+        }
+        else if (act == Z80_ICS_MDF_ACT_FC)
+        {
+            ics_write_reg(mdf_cur, 0x01, Z80_ICS_WIDTH_16,
+                          get16(mdf_entry_base(mdf_index)));   /* osc_fc only */
         }
         else if (act == Z80_ICS_MDF_ACT_OFF_RAMP)
         {
@@ -587,10 +592,14 @@ static void mdf_tick(void)
     }
     mdf_remaining = mdf_entry_ticks(mdf_index);
 
-    /* Non-critical (after the trigger): pre-stage the following entry onto the
-       idle voice (mdf_next), with the whole hold to spare before the next tick. */
+    /* Pre-stage the next entry onto the idle voice only when it is a key-on
+       (ON / ON_RAMP); the fc-only sweep adds no idle-voice writes between tones. */
     if ((u16)(mdf_index + 1) < mdf_count)
-        mdf_stage(mdf_next, (u16)(mdf_index + 1));
+    {
+        u8 nact = mdf_entry_act((u16)(mdf_index + 1));
+        if (nact == Z80_ICS_MDF_ACT_ON || nact == Z80_ICS_MDF_ACT_ON_RAMP)
+            mdf_stage(mdf_next, (u16)(mdf_index + 1));
+    }
 }
 
 static void mdf_start(u16 value)

@@ -4,8 +4,9 @@
 Everything downstream is derived from here: the Z80 sequencer script bytes
 (uploaded to the TestROM driver), the MDFourier ``.mfn`` profile, the static
 voice template, and the expected capture length.  The signal is a standard
-MDFourier layout — start sync pulse train, a dense rising semitone sweep, a
-pan sweep, a silence (noise floor) block, and an end sync pulse train.
+MDFourier layout — start sync pulse train, a dense rising tone sweep (one voice
+played continuously, retuned per step via osc_fc), a silence (noise floor)
+block, and an end sync pulse train.
 
 Why this is reproducible across hardware and the simulator: the whole sequence
 is driven by ICS timer 0 inside the Z80 IRQ handler, and the ICS timer and the
@@ -72,13 +73,11 @@ PAN_CENTER = 0x80
 # ── Sequencer entry actions (mirror z80_ics_protocol.h) ─────────────────────
 ACT_OFF = 0          # silence (osc stopped)
 ACT_ON = 1           # key on at full volume — sharp edge (sync pulses)
-ACT_ON_RAMP = 2      # key on with a short volume ramp — de-popped (tone/pan)
-ACT_OFF_RAMP = 3     # key off with a volume ramp DOWN — de-popped (tone sweep)
-
-# Tone-sweep inter-tone gap: each tone is followed by a one-frame ACT_OFF_RAMP
-# (the voice fades out via VOL_INVERT, then sits silent) before the next tone
-# keys on, so consecutive tones don't run together.
-TONE_GAP_FRAMES = 1
+ACT_ON_RAMP = 2      # key on with a short volume ramp — de-popped (tone start)
+ACT_OFF_RAMP = 3     # key off with a volume ramp DOWN (legacy, unused)
+ACT_FC = 4           # change osc_fc only, voice keeps playing — the tone sweep
+                     # changes pitch with no key-on/off, so no host/sequencer
+                     # write races (just one osc_fc write per step)
 
 # Volume-envelope attack ramp (applied at key-on for ACT_ON_RAMP).  The voice
 # template sets the rate (vol_incr) / mode (vmode) / window (vol_start..vol_end);
@@ -101,14 +100,12 @@ SYNC_PULSE_FRAMES = 1         # pulseFrameLen
 SYNC_PULSE_COUNT = 10          # pulseCount
 
 # ── Tone sweep ──────────────────────────────────────────────────────────────
+# One voice plays continuously; only osc_fc changes per step (see _tone_block).
 TONE_BASE_FREQ = 110.0         # A2
-TONE_COUNT = 72                # 6 octaves of semitones
-TONE_FRAMES = 24               # frames held per tone (~100 ms)
-
-# ── Pan sweep ───────────────────────────────────────────────────────────────
-PAN_FREQ = 880.0               # fixed mid tone
-PAN_STEPS = 16                 # full L->R in 16 steps (reg 0x0c is a 0..255 index)
-PAN_FRAMES = 24
+TONE_STEPS_PER_OCTAVE = 24     # quarter-tone granularity (was 12 = semitones)
+TONE_OCTAVES = 6               # 110 Hz -> ~7040 Hz
+TONE_COUNT = TONE_OCTAVES * TONE_STEPS_PER_OCTAVE + 1   # 145 tones
+TONE_FRAMES = 16               # frames held per tone (~267 ms)
 
 # ── Silence (noise floor) ───────────────────────────────────────────────────
 SILENCE_FRAMES = 48
@@ -119,17 +116,15 @@ def configure(short: bool = False) -> None:
     fast simulator smoke tests; the profile and capture length stay consistent
     because everything is derived from these module globals.
     """
-    global TONE_COUNT, TONE_FRAMES, PAN_STEPS, SYNC_PULSE_COUNT, SILENCE_FRAMES
+    global TONE_COUNT, TONE_FRAMES, SYNC_PULSE_COUNT, SILENCE_FRAMES
     if short:
-        TONE_COUNT = 12
+        TONE_COUNT = 25
         TONE_FRAMES = 16
-        PAN_STEPS = 8
         SYNC_PULSE_COUNT = 6
         SILENCE_FRAMES = 24
     else:
-        TONE_COUNT = 72
-        TONE_FRAMES = 24
-        PAN_STEPS = 16
+        TONE_COUNT = TONE_OCTAVES * TONE_STEPS_PER_OCTAVE + 1
+        TONE_FRAMES = 16
         SYNC_PULSE_COUNT = 10
         SILENCE_FRAMES = 48
 
@@ -150,13 +145,8 @@ def fc_for_freq(freq: float) -> int:
 
 
 def tone_freqs() -> List[float]:
-    return [TONE_BASE_FREQ * (2.0 ** (n / 12.0)) for n in range(TONE_COUNT)]
-
-
-def pan_values() -> List[int]:
-    if PAN_STEPS == 1:
-        return [PAN_CENTER]
-    return [round(i * 255 / (PAN_STEPS - 1)) for i in range(PAN_STEPS)]
+    return [TONE_BASE_FREQ * (2.0 ** (n / TONE_STEPS_PER_OCTAVE))
+            for n in range(TONE_COUNT)]
 
 
 @dataclasses.dataclass
@@ -206,23 +196,17 @@ def _silence_block(name: str, cut: int) -> Block:
 
 
 def _tone_block() -> Block:
-    # Each tone: key-on ramp up + hold (TONE_FRAMES), then a ramp-down key-off +
-    # 1-frame gap (TONE_GAP_FRAMES) before the next tone keys on.
-    entries = []
-    for f in tone_freqs():
-        fc = fc_for_freq(f)
-        entries.append(Entry(fc, PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES))
-        entries.append(Entry(fc, PAN_CENTER, ACT_OFF_RAMP, TONE_GAP_FRAMES))
-    # element = tone + gap; cut skips the attack ramp at the start and the
-    # ramp-down/gap at the end so only the steady tone is analyzed.
-    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES + TONE_GAP_FRAMES,
-                 TONE_GAP_FRAMES + 1, "green", "m", entries)
-
-
-def _pan_block() -> Block:
-    fc = fc_for_freq(PAN_FREQ)
-    entries = [Entry(fc, p, ACT_ON_RAMP, PAN_FRAMES) for p in pan_values()]
-    return Block("PanSweep", "2", PAN_STEPS, PAN_FRAMES, 1, "yellow", "S", entries)
+    # One continuously-playing voice: key on (with a short ramp to de-pop the
+    # start) on the first tone, then only change osc_fc per step.  No per-tone
+    # key-on/off, no gaps — changing osc_fc retunes the looping voice smoothly,
+    # so there are no host-write/sequencer collisions during the sweep.
+    freqs = tone_freqs()
+    entries = [Entry(fc_for_freq(freqs[0]), PAN_CENTER, ACT_ON_RAMP, TONE_FRAMES)]
+    for f in freqs[1:]:
+        entries.append(Entry(fc_for_freq(f), PAN_CENTER, ACT_FC, TONE_FRAMES))
+    # cut skips the start of each element (attack ramp on tone 0; the osc_fc
+    # retune transient on the rest) so only the steady pitch is analyzed.
+    return Block("Tones", "1", TONE_COUNT, TONE_FRAMES, 2, "green", "m", entries)
 
 
 def build_blocks() -> List[Block]:
@@ -231,8 +215,6 @@ def build_blocks() -> List[Block]:
         _sync_block("Sync", 0),
         _silence_block("Silence", 0),
         _tone_block(),
-        _silence_block("Silence", 0),
-        _pan_block(),
         _silence_block("Silence", 0),
         _sync_block("Sync", 0),
     ]
@@ -296,9 +278,9 @@ def describe() -> str:
         f"timer 0         : scale=0x{TIMER_SCALE0:02x} preset=0x{TIMER_PRESET0:02x} period={TIMER_PERIOD_CLOCKS} clk",
         f"loop region     : 0x{LOOP_START:05x}..0x{LOOP_END:05x} ({LOOP_LEN} bytes)",
         f"sync            : {SYNC_FREQ} Hz, {SYNC_PULSE_COUNT} pulses x {SYNC_PULSE_FRAMES} frames, fc={fc_for_freq(SYNC_FREQ)}",
-        f"tones           : {TONE_COUNT} semitones {tone_freqs()[0]:.1f}..{tone_freqs()[-1]:.1f} Hz, "
+        f"tones           : {TONE_COUNT} steps ({TONE_STEPS_PER_OCTAVE}/octave, fc-only sweep) "
+        f"{tone_freqs()[0]:.1f}..{tone_freqs()[-1]:.1f} Hz, "
         f"fc {fc_for_freq(tone_freqs()[0])}..{fc_for_freq(tone_freqs()[-1])}, {TONE_FRAMES} frames each",
-        f"pan sweep       : {PAN_FREQ:.0f} Hz, {PAN_STEPS} steps {pan_values()}, {PAN_FRAMES} frames each",
         f"script entries  : {len(script)} / {MDF_MAX_ENTRIES}",
         f"total           : {total_frames(blocks)} frames, {total_samples(blocks)} samples, "
         f"{total_samples(blocks)/SAMPLE_RATE:.2f} s",

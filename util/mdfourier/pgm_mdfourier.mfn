@@ -4,11 +4,9 @@ PGM (IGS PGM) ICS2115
 ICS 16.68934 552 8820 1 10
 CLK n
 [MonoBalanceBlock] 40
-[ToneLines] 7
+[ToneLines] 5
 Sync s 1 20 0 red m
 Silence n 1 48 0 gray m
-Tones 1 72 25 2 green m
-Silence n 1 48 0 gray m
-PanSweep 2 16 24 1 yellow S
+Tones 1 145 16 2 green m
 Silence n 1 48 0 gray m
 Sync s 1 20 0 red m
